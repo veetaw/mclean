@@ -36,25 +36,29 @@ narrow since it runs with elevated privileges.
 | DevToolsDetectors, MobileDevDetectors, PowerUserInspectors, MenuBarAgent, UIDesignSystem, RemoteControlServer | Placeholder targets only (compile, no functionality). Scoped for later phases. |
 | App/, PrivilegedHelper/, RemoteWebApp/, Scripts/ | Directory scaffolding only. |
 
-## Open checkpoints (must not be resolved without the user)
+## Checkpoints (PROMPT MASTER §10) — decisions log
 
-These come directly from the product spec (PROMPT MASTER §10) and are
-tracked here so they aren't silently decided by an agent:
+1. **Local HTTP server library for `RemoteControlServer`** — **decided:
+   Swifter.** Small, embeddable, no heavy async-networking stack to carry
+   for what is a single-client-at-a-time, LAN-only server. Trade-off
+   accepted: Swifter is lightly maintained upstream, so `RemoteControlServer`
+   should keep its own usage surface narrow (routing + request/response
+   only) so swapping it out later stays cheap if needed. Not yet wired into
+   `Package.swift` — happens when the Phase 2 `RemoteControlServer` agent
+   implements the module.
+2. **Real deletion/quarantine code path** — **decided: implement now.**
+   Quarantine is reversible by design (move, not delete; 7-day default
+   retention; explicit separate purge step), so the user approved building
+   the concrete `FileSystemQuarantineManager` in Phase 1 rather than leaving
+   it stubbed.
+3. **Any system permission not already listed in the product spec** — none
+   have come up yet; still tracked as a standing checkpoint.
+4. **Final format of the safety rule file** — still a **draft**, pending
+   review of the open questions listed at the bottom of `SAFETY_RULES.md`.
+   Not blocking Phase 1: `Denylist` and the quarantine mechanism don't
+   depend on the rule-file format being finalized.
 
-1. **Local HTTP server library for `RemoteControlServer`** — trade-off
-   between a minimal hand-rolled `Network.framework` server, a lightweight
-   library (e.g. Swifter), or SwiftNIO. Not yet decided; the package has no
-   HTTP dependency declared.
-2. **Any code path that performs a real deletion** (even into quarantine)
-   against non-test data. `SafetyRules.QuarantineManaging` is a protocol
-   only; no conforming type touches real paths yet.
-3. **Any system permission not already listed in the product spec**, if one
-   turns out to be needed during implementation.
-4. **Final format of the safety rule file** (`SAFETY_RULES.md` / the YAML
-   schema). `RuleSetDraft.swift` in the `SafetyRules` package sketches a
-   proposal, explicitly marked draft/pending review.
-
-## Trade-offs to be documented here as they're made
+## Trade-offs
 
 - HTTP vs. local TLS for the remote-control server (currently: HTTP + token
   auth, LAN-only, documented as an accepted trade-off pending a future
