@@ -66,3 +66,10 @@ narrow since it runs with elevated privileges.
 - SPM packages declare `platforms: [.macOS(.v15)]` as a conservative build
   floor; the actual app targets will pin macOS 26 (Tahoe)+ as the real
   minimum deployment target, per the product spec.
+- **Xcode project generation: xcodegen.** `swift package generate-xcodeproj`
+  no longer exists in current SwiftPM, and hand-writing a `.pbxproj` blind
+  is error-prone. Installed via Homebrew (`brew install xcodegen`); the
+  `App/` target definitions are driven by a `project.yml` checked into the
+  repo, with the generated `.xcodeproj` itself left out of git (regenerate
+  with `xcodegen generate`) since generated Xcode project files churn noisily
+  in diffs and are fully reproducible from `project.yml`.
