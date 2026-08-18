@@ -1,0 +1,43 @@
+# Xcode
+build/
+DerivedData/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Node (RemoteWebApp)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+.env
+.env.local
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Notarization / signing artifacts (never commit)
+*.p12
+*.mobileprovision
+*.cer
+Scripts/secrets/
+
+# Local runtime data (quarantine store, SQLite db, logs) — never commit user data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+Quarantine/
+Logs/
