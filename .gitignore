@@ -38,6 +38,9 @@ dist/
 *.cer
 Scripts/secrets/
 
+# Scripts/release.sh output (local .dmg packages) — build artifacts, never commit
+dist/
+
 # Local runtime data (quarantine store, SQLite db, logs) — never commit user data
 *.sqlite
 *.sqlite-shm
