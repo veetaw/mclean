@@ -35,6 +35,13 @@ public struct VirusTotalReport: Sendable, Hashable, Codable {
 /// queuing + backoff. No silent bulk requests: callers get a queued-position
 /// signal rather than the client firing requests unattended in the
 /// background across many files.
+///
+/// `awaitSlot()` genuinely suspends (via the injected `Sleeping`) when the
+/// per-minute or per-day budget is exhausted, waking up only once the
+/// relevant window has reset -- it never spins or retries aggressively, and
+/// it never lets a request through while over budget. `clock`/`sleeper` are
+/// injectable so tests can exercise this wait behavior with a fake clock
+/// instead of blocking on real minutes/days.
 public actor VirusTotalRateLimiter {
     public struct Limits: Sendable {
         public var requestsPerMinute: Int
@@ -44,23 +51,61 @@ public actor VirusTotalRateLimiter {
     }
 
     private let limits: Limits
+    private let clock: Clock
+    private let sleeper: Sleeping
     private var minuteWindowStart: Date
     private var requestsThisMinute: Int = 0
     private var dayWindowStart: Date
     private var requestsToday: Int = 0
 
-    public init(limits: Limits = .freeTier, now: Date = Date()) {
+    public init(
+        limits: Limits = .freeTier,
+        clock: Clock = SystemClock(),
+        sleeper: Sleeping = TaskSleeper()
+    ) {
         self.limits = limits
-        self.minuteWindowStart = now
-        self.dayWindowStart = now
+        self.clock = clock
+        self.sleeper = sleeper
+        let start = clock.now()
+        self.minuteWindowStart = start
+        self.dayWindowStart = start
     }
 
     /// Suspends until it is safe to make one more request, then reserves the
-    /// slot. `now` is injected for testability.
-    public func awaitSlot(now: @Sendable () -> Date = Date.init) async {
-        // Full sleep/backoff scheduling left to the RemoteControlServer/
-        // MenuBarAgent integration agent — this is the accounting core.
-        let current = now()
+    /// slot before returning. If the per-minute budget is exhausted, waits
+    /// only until that minute window resets; if the per-day budget is
+    /// exhausted, waits until the day window resets. Either way this is a
+    /// single bounded wait per exhausted window (re-checked in a loop, since
+    /// time may have been injected non-monotonically in tests, or a wait
+    /// could wake slightly early) -- not a retry/spin loop hammering the
+    /// clock. Throws `CancellationError` promptly if the calling task is
+    /// cancelled while waiting, instead of waiting the full duration out.
+    public func awaitSlot() async throws {
+        while true {
+            try Task.checkCancellation()
+            let current = clock.now()
+            resetWindowsIfNeeded(current: current)
+
+            if requestsToday >= limits.requestsPerDay {
+                let wait = max(1, 86400 - current.timeIntervalSince(dayWindowStart))
+                await sleeper.sleep(for: wait)
+                try Task.checkCancellation()
+                continue
+            }
+            if requestsThisMinute >= limits.requestsPerMinute {
+                let wait = max(1, 60 - current.timeIntervalSince(minuteWindowStart))
+                await sleeper.sleep(for: wait)
+                try Task.checkCancellation()
+                continue
+            }
+
+            requestsThisMinute += 1
+            requestsToday += 1
+            return
+        }
+    }
+
+    private func resetWindowsIfNeeded(current: Date) {
         if current.timeIntervalSince(minuteWindowStart) >= 60 {
             minuteWindowStart = current
             requestsThisMinute = 0
@@ -69,8 +114,6 @@ public actor VirusTotalRateLimiter {
             dayWindowStart = current
             requestsToday = 0
         }
-        requestsThisMinute += 1
-        requestsToday += 1
     }
 
     public func remainingToday() -> Int {
