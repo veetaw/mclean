@@ -3,15 +3,15 @@
 ## Automated coverage
 
 Every package under `Packages/` has its own `swift test` suite. As of this
-writing, **345 tests pass across 15 packages**, verified independently
+writing, **487 tests pass across 21 packages**, verified independently
 (not just trusted from whatever built them) with a clean `.build` for each:
 
 | Package | Tests |
 |---|---|
 | CoreScanEngine | 1 |
 | SafetyRules | 42 |
-| PrivilegedHelperXPC | 1 |
-| VirusTotalClient | 1 |
+| PrivilegedHelperXPC | 11 |
+| VirusTotalClient | 21 |
 | DevToolsDetectors | 44 |
 | MobileDevDetectors | 30 |
 | PowerUserInspectors | 70 |
@@ -23,8 +23,21 @@ writing, **345 tests pass across 15 packages**, verified independently
 | LargeOldFilesFinder | 16 |
 | DuplicateFinder | 19 |
 | Shredder | 16 |
+| CacheCleaner | 29 |
+| Uninstaller | 7 |
+| Optimization | 20 |
+| PrivacyCleaner | 27 |
+| MaintenanceScripts | 28 |
+| SpaceLens | 31 |
 
-Run all of them:
+Run all of them in one command (also builds `MCleanPro-DeveloperID` and
+prints a pass/fail summary, non-zero exit on any failure):
+
+```sh
+Scripts/ci.sh
+```
+
+Or just the package tests, the same loop `ci.sh` uses internally:
 
 ```sh
 for pkg in Packages/*/; do (cd "$pkg" && swift test); done

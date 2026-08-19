@@ -11,25 +11,30 @@ CoreScanEngine  (no deps)
   ├─ TrashCleaner           (depends on CoreScanEngine)
   ├─ LargeOldFilesFinder    (depends on CoreScanEngine)
   ├─ DuplicateFinder        (depends on CoreScanEngine)
+  ├─ CacheCleaner           (depends on CoreScanEngine)
+  ├─ Optimization           (depends on CoreScanEngine)
+  ├─ PrivacyCleaner         (depends on CoreScanEngine)
   └─ RemoteControlServer    (depends on CoreScanEngine, SafetyRules, Swifter)
 
 PrivilegedHelperXPC (no deps)
-  └─ PowerUserInspectors    (depends on CoreScanEngine, PrivilegedHelperXPC)
+  ├─ PowerUserInspectors    (depends on CoreScanEngine, PrivilegedHelperXPC)
+  └─ Uninstaller            (depends on CoreScanEngine, PowerUserInspectors)
 
 SafetyRules
   └─ MenuBarAgent           (depends on CoreScanEngine, SafetyRules)
 
 UIDesignSystem   (no deps)
-VirusTotalClient (no deps)
+  └─ SpaceLens              (depends on UIDesignSystem only — no CoreScanEngine, pure visualization)
 
-MainAppUI (depends on UIDesignSystem + every module above, incl. Shredder)
+VirusTotalClient  (no deps)
+MaintenanceScripts (no deps — fixed action set, not file discovery)
+
+MainAppUI (depends on UIDesignSystem + every module above, incl. Shredder,
+           Uninstaller, MaintenanceScripts, SpaceLens)
   └─ App/AppStoreTarget, App/DeveloperIDTarget (thin @main entry points, xcodegen)
 ```
 
-`PrivilegedHelper` (the actual executable target registered via
-`SMAppService`) is not scaffolded yet — it will depend only on
-`PrivilegedHelperXPC` for the protocol definition, kept intentionally
-narrow since it runs with elevated privileges.
+`PrivilegedHelper` has no real executable target yet — see "PrivilegedHelper: mock/stub status" below.
 
 ## Status by module
 
@@ -37,8 +42,8 @@ narrow since it runs with elevated privileges.
 |---|---|
 | CoreScanEngine | `Detector` protocol, `ScanItem`, concurrent `ScanEngine` actor. Read-only by construction. **1 test.** |
 | SafetyRules | `SafetyVerdict`, hardcoded `Denylist` (incl. checkpoint 4's credential-directory/sensitive-file-pattern/dirty-git-repo/non-boot-volume additions), `SafetyClassifier` with the closed-checkpoint-4 official+user rule-file system (Yams-parsed, SHA-256 integrity check, conservative merge), and the **real** `FileSystemQuarantineManager` (reversible move-based quarantine, JSON manifest, independent denylist re-check). **42 tests.** |
-| PrivilegedHelperXPC | XPC protocol defined. No helper executable or entitlements yet. **1 test.** |
-| VirusTotalClient | Hash-check-first protocol + rate limiter. No concrete network implementation yet. **1 test.** |
+| PrivilegedHelperXPC | XPC protocol + `PrivilegedHelperClientProtocol` (Swift-native async seam) + `MockPrivilegedHelper` (in-memory simulation, no real elevation). No helper executable or `SMAppService` registration yet — see "PrivilegedHelper: mock/stub status" below. **11 tests.** |
+| VirusTotalClient | **Real network implementation.** Hash-check (`GET /api/v3/files/{sha256}`, 404→nil), opt-in-only upload with genuine consent-gate-before-any-request, rate limiter with real suspend/backoff (not just accounting). **21 tests.** |
 | DevToolsDetectors | 10 toolchain detectors (Python/Node/Rust/Go/Ruby/Java/Docker/Xcode/Homebrew/editors), all read-only. **44 tests.** |
 | MobileDevDetectors | Android (AVD/SDK/Studio/Gradle-wrapper) + iOS (Simulator/CocoaPods/Fastlane) detectors. **30 tests.** |
 | PowerUserInspectors | Installed apps, TCC listing (read-only, no revocation path), config file explorer (backup-before-write, always), per-language package explorer, JSON system report (PDF export deferred). **70 tests.** |
@@ -50,20 +55,36 @@ narrow since it runs with elevated privileges.
 | LargeOldFilesFinder | Configurable size/age/type-filtered scan, scoped to common user content folders (not a blind home-directory walk). **16 tests.** |
 | DuplicateFinder | Exact-match (SHA-256, size-bucketed) + perceptual-hash (dHash + luminance) similar-image detection. **19 tests.** |
 | Shredder | Secure multi-pass single-file deletion — the **one deliberate exception** to the quarantine flow. See "Shredder: the quarantine exception" below. **16 tests.** |
-| MainAppUI | `Capabilities`/`BuildFlavor` registry, `AppEnvironment` composition root, full `NavigationSplitView` app (Dashboard, System Junk, Developer Tools, Mobile Dev, Power User, Quarantine, Shredder, Remote Control, Settings, onboarding). **14 tests.** |
-| App/ | `project.yml` (xcodegen) generating `MCleanPro-AppStore` (sandboxed) and `MCleanPro-DeveloperID` (unsandboxed, hardened runtime) — both verified to build with `xcodebuild`, including all 15 packages. |
-| PrivilegedHelper/, Scripts/ | Directory scaffolding only, plus `Scripts/update-official-rules-hash.sh` — no privileged-helper executable yet. |
+| CacheCleaner | User/app cache, user-writable logs, temp files, incomplete downloads, unused language packs (`.lproj`) — closes §5.1's "System Junk" cache-cleanup scope. **29 tests.** |
+| Uninstaller | Per-app "find related files" service (Application Support/Preferences/Caches/Saved State/LaunchAgents/Containers, dot-boundary bundle-ID matching), full preview before anything moves. Not a `Detector` — invoked on demand from `UninstallerView` for one user-picked app. **7 tests.** |
+| Optimization | Launch Agent detector (`~/Library/LaunchAgents` + `/Library/LaunchAgents` only, no root-owned locations), best-effort login-items/startup-impact reporting, honest about what a *complete* login-items list would require (Full Disk Access to a private store) and doesn't claim it. **20 tests.** |
+| PrivacyCleaner | Safari/Chrome/Firefox cache/cookie/history detectors with a real, engine-honored site preserve list (`SitePreserveList` — excludes matching per-origin directories outright where browsers support that granularity; states plainly in `reason` where a monolithic store can't honor it at all). Settings UI to edit the list live is deferred — see below. **27 tests.** |
+| MaintenanceScripts | Four fixed, reviewed actions (flush DNS, rebuild Spotlight index, verify startup disk, clear font cache) — each described before it can run, never automatic, never SafetyRules/quarantine (fixed command set, no arbitrary path). **28 tests.** |
+| SpaceLens | Interactive disk-usage treemap — bounded/cancellable size-tree builder, pure squarified-layout algorithm (tiling/proportionality verified geometrically), SwiftUI drill-down view. Strictly read-only. **31 tests.** |
+| MainAppUI | `Capabilities`/`BuildFlavor` registry, `AppEnvironment` composition root, full `NavigationSplitView` app — Dashboard, System Junk, Developer Tools, Mobile Dev, Power User, Optimization, Privacy, Uninstaller, Maintenance, Space Lens, Quarantine, Shredder, Remote Control, Settings, onboarding. **14 tests.** |
+| App/ | `project.yml` (xcodegen) generating `MCleanPro-AppStore` (sandboxed, **paused from the active pipeline**, see below) and `MCleanPro-DeveloperID` (unsandboxed, hardened runtime — the only target `Scripts/ci.sh`/`release.sh` build). Both verified to build with `xcodebuild` as of the last time AppStore was exercised; DeveloperID is verified on every `ci.sh` run. |
+| PrivilegedHelper/ | No real executable target — `PrivilegedHelperXPC.MockPrivilegedHelper` stands in. See "PrivilegedHelper: mock/stub status" below. |
+| Scripts/ | `ci.sh`, `release.sh`, `pre-push-hook.sh`, `install-git-hooks.sh`, `update-official-rules-hash.sh` — see "Release pipeline" below. |
 
-**Total: 345 tests passing across 15 packages**, verified independently at every step (not trusted from any implementing agent's self-report) with clean `.build` directories and, for `MainAppUI`, both Xcode targets actually building via `xcodebuild`.
+**Total: 487 tests passing across 21 packages**, verified independently at every step (not trusted from any implementing agent's self-report) with clean `.build` directories, and confirmed end-to-end via `Scripts/ci.sh` (`MCleanPro-DeveloperID` build + every package's tests, one command, real exit code).
 
-**Remaining gap:** the product spec's §5.1 "System Junk" scope is now
-**partially** closed — Trash Bins, Large & Old Files, Duplicates, and
-Shredder exist (Phase 5). Still unbuilt: system/user cache cleanup
-proper, an app **Uninstaller**, **Optimization** (login items/launch
-agents review), a **Privacy cleaner** (browser cookie/history/cache, with
-a preserve-list), **maintenance scripts** (flush DNS, rebuild Spotlight
-index, etc.), and **Space Lens** (interactive disk-usage treemap). No
-package implements any of these yet.
+**§5.1 scope: now fully covered at MVP level.** Every sub-feature from the
+original product spec's §5.1 has at least a working implementation: System
+Junk (cache/logs/temp/downloads/language packs), Trash Bins, Large & Old
+Files, Duplicates, Uninstaller, Optimization, Privacy, Maintenance
+Scripts, Space Lens, and Shredder. What's still deferred within that
+scope, by design, is narrower than a missing feature:
+- **PrivacyCleaner's site preserve-list has no Settings UI to edit it
+  live** — the mechanism itself is real and engine-honored (see the table
+  row above); a user just can't populate it without editing code today.
+  Not a security gap: even with an empty/unconfigurable list, nothing is
+  ever deleted without explicit per-item confirmation regardless.
+- `PowerUserInspectors.SystemReportExporter.exportPDF()` always throws,
+  documented as a UI-layer TODO (Phase 2) — JSON export works.
+- `RemoteWebApp` has no camera-based QR scanning (Phase 2) — manual token
+  entry / URL-prefill works.
+- Several detectors' staleness thresholds are tunable constructor
+  defaults, not yet exposed as user-facing Settings.
 
 ## Non-boot volume handling — a bug fix caught while closing checkpoint 4
 
@@ -152,6 +173,88 @@ carries the full technical explanation. **UI copy for this feature must
 say "makes recovery significantly harder," never "guarantees the data is
 unrecoverable"** — full-disk encryption (FileVault, already standard) and
 destroying key material is the more reliable primitive on SSDs in general.
+
+## PrivilegedHelper: mock/stub status
+
+**No real privileged helper exists.** `PrivilegedHelper/` has no
+executable target — nothing in this codebase calls `SMAppService`,
+installs a daemon, or opens an `NSXPCConnection` (confirmed by grep across
+`Packages/PrivilegedHelperXPC/` and `PrivilegedHelper/`; zero matches
+outside doc comments explicitly stating it's not used yet). No elevated
+privileges are exercised anywhere in this app today.
+
+What exists instead: `PrivilegedHelperClientProtocol`
+(`Packages/PrivilegedHelperXPC/Sources/PrivilegedHelperXPC/MockPrivilegedHelper.swift`)
+— a Swift-native `async`/`await` seam mirroring the four operations the
+`@objc`, reply-closure-based `PrivilegedHelperProtocol` exposes for the
+real XPC wire format — and `MockPrivilegedHelper`, an `actor` that
+simulates those operations entirely in memory (quarantine records a path
+in a dictionary rather than moving anything, restore consumes a receipt,
+maintenance tasks return canned outcomes for a small fixed ID set).
+App-side code depends on `PrivilegedHelperClientProtocol`, never on the
+mock's concrete type or on `PrivilegedHelperProtocol` directly, so a real
+XPC-backed conformer can replace `MockPrivilegedHelper` later with zero
+call-site changes — only a change at the dependency-injection root.
+
+Real implementation work still needed, once there's a reason to build it:
+an executable target under `PrivilegedHelper/` (`NSXPCListener` exporting
+`PrivilegedHelperProtocol` over `PrivilegedHelperConstants.machServiceName`),
+`SMAppService.daemon(plistName:)` registration from the Developer ID app
+only, a real `NSXPCConnection`-backed `PrivilegedHelperClientProtocol`
+conformer, and — critically — the helper's own independent
+`SafetyRules.Denylist` re-check before touching disk, so a compromised or
+buggy app process can't abuse elevated access (this is a structural
+requirement already documented on `PrivilegedHelperProtocol` itself, not
+new).
+
+## Release pipeline
+
+Two tracks, deliberately kept separate — one works today, one is
+scaffolding for later.
+
+**Track A — local, working now.** `Scripts/ci.sh` runs `xcodegen generate`
++ `xcodebuild build` for `MCleanPro-DeveloperID` (Debug) + `swift test`
+across every package, with a clear pass/fail summary and non-zero exit on
+any failure; verified end-to-end. An opt-in git pre-push hook
+(`Scripts/install-git-hooks.sh`) runs it before every push. `Scripts/release.sh`
+bumps a semantic version (git tags `vX.Y.Z`, `v0.1.0` fallback baseline —
+no tag exists yet, a maintainer creates the first one deliberately),
+regenerates `CHANGELOG.md` from Conventional Commit messages since the
+last tag, builds `MCleanPro-DeveloperID` in Release, and packages a
+`.dmg` under `dist/` (gitignored) via `hdiutil`. It inspects the actual
+`codesign` output and only drops the `-unsigned-local-build-only`
+filename suffix for a genuine Developer ID Application signature — see
+"Code signing: current status" below for why every build today keeps that
+suffix, honestly. Verified end-to-end for real (not just self-reported):
+built, packaged, `hdiutil verify`d as VALID.
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/)
+from this point forward — existing history is not being rewritten.
+
+**Track B — dormant scaffolding, not yet active.**
+`.github/workflows/ci.yml`/`release.yml` use normal GitHub Actions
+triggers (push/PR; push tags `v*`) but have nowhere to fire until this
+repo is pushed to a GitHub remote — see README.md for why no remote exists
+yet by design. `release.yml`'s signing/notarization section is explicitly
+marked `[NON-FUNCTIONAL]` (`if: false`, echo-only steps) and references
+five secrets purely via `${{ secrets.NAME }}` syntax — no real or
+realistic-looking credential material anywhere. **Neither workflow ever
+auto-publishes anything** — `release.yml`'s happy path uploads the same
+honest unsigned `.dmg` as a workflow-run artifact, never a GitHub Release,
+never an external upload.
+
+### Code signing: current status
+
+No paid Apple Developer Program membership / Developer ID Application
+certificate exists, and **none is needed today** — Xcode already signs
+local builds automatically with the personal free-tier team, which is
+sufficient to build and run this app on the machine that built it. A
+Developer ID certificate only becomes necessary if the app needs to run
+on a different Mac or be shared with someone else (Gatekeeper requires a
+recognized signature + notarization for that). `release.sh` makes this
+distinction honest in the artifact's filename itself rather than a doc
+comment nobody reads at release time. See `RELEASE.md` for the full
+local-build-vs-distributable-release distinction.
 
 ## Checkpoints (PROMPT MASTER §10) — decisions log
 
