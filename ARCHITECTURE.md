@@ -7,7 +7,7 @@ CoreScanEngine  (no deps)
   ├─ SafetyRules            (depends on CoreScanEngine)
   ├─ DevToolsDetectors      (depends on CoreScanEngine)
   ├─ MobileDevDetectors     (depends on CoreScanEngine)
-  └─ RemoteControlServer    (depends on CoreScanEngine, SafetyRules)  [blocked, see below]
+  └─ RemoteControlServer    (depends on CoreScanEngine, SafetyRules, Swifter)
 
 PrivilegedHelperXPC (no deps)
   └─ PowerUserInspectors    (depends on CoreScanEngine, PrivilegedHelperXPC)
@@ -17,24 +17,41 @@ SafetyRules
 
 UIDesignSystem   (no deps)
 VirusTotalClient (no deps)
+
+MainAppUI (depends on UIDesignSystem + every module above)
+  └─ App/AppStoreTarget, App/DeveloperIDTarget (thin @main entry points, xcodegen)
 ```
 
-`MainAppUI` (not yet scaffolded) will depend on `UIDesignSystem` plus every
-other module to assemble the SwiftUI app. `PrivilegedHelper` (the actual
-executable target registered via `SMAppService`) depends only on
+`PrivilegedHelper` (the actual executable target registered via
+`SMAppService`) is not scaffolded yet — it will depend only on
 `PrivilegedHelperXPC` for the protocol definition, kept intentionally
 narrow since it runs with elevated privileges.
 
-## Status by module (as of initial scaffolding)
+## Status by module
 
 | Module | Status |
 |---|---|
-| CoreScanEngine | Core protocols + concurrent `ScanEngine` actor implemented. Read-only by construction — no deletion code path exists here. |
-| SafetyRules | `SafetyVerdict`, hardcoded `Denylist` (path/pattern matching), and the `QuarantineManaging` **protocol** are implemented. No concrete quarantine/deletion implementation yet — gated on checkpoint 2 (see below). Rule file format is a **draft**, gated on checkpoint 4. |
-| PrivilegedHelperXPC | XPC protocol defined. No helper executable or entitlements yet. |
-| VirusTotalClient | Protocol + rate-limit accounting implemented. No network layer yet. |
-| DevToolsDetectors, MobileDevDetectors, PowerUserInspectors, MenuBarAgent, UIDesignSystem, RemoteControlServer | Placeholder targets only (compile, no functionality). Scoped for later phases. |
-| App/, PrivilegedHelper/, RemoteWebApp/, Scripts/ | Directory scaffolding only. |
+| CoreScanEngine | `Detector` protocol, `ScanItem`, concurrent `ScanEngine` actor. Read-only by construction. **1 test.** |
+| SafetyRules | `SafetyVerdict`, hardcoded `Denylist`, `SafetyClassifier`, and the **real** `FileSystemQuarantineManager` (reversible move-based quarantine, JSON manifest, independent denylist re-check). Rule file format still a **draft** (checkpoint 4). **14 tests.** |
+| PrivilegedHelperXPC | XPC protocol defined. No helper executable or entitlements yet. **1 test.** |
+| VirusTotalClient | Hash-check-first protocol + rate limiter. No concrete network implementation yet. **1 test.** |
+| DevToolsDetectors | 10 toolchain detectors (Python/Node/Rust/Go/Ruby/Java/Docker/Xcode/Homebrew/editors), all read-only. **44 tests.** |
+| MobileDevDetectors | Android (AVD/SDK/Studio/Gradle-wrapper) + iOS (Simulator/CocoaPods/Fastlane) detectors. **30 tests.** |
+| PowerUserInspectors | Installed apps, TCC listing (read-only, no revocation path), config file explorer (backup-before-write, always), per-language package explorer, JSON system report (PDF export deferred). **70 tests.** |
+| MenuBarAgent | `NSStatusItem` controller, FSEvents-based background monitoring, low-disk-space notifications, scheduled health check, system stats. **37 tests.** |
+| UIDesignSystem | Liquid Glass tokens/components (cards, buttons, safety badges, scan-result rows). **7 tests.** |
+| RemoteControlServer | Swifter-based LAN HTTP server, Bonjour advertisement, two-phase pairing, approval workflow (single quarantine call site, defense-in-depth verdict re-check). **27 tests.** |
+| RemoteWebApp | Vanilla HTML/CSS/JS mobile client matching the server's API contract (documented in `RemoteWebApp/README.md`). No camera QR scanning yet. |
+| MainAppUI | `Capabilities`/`BuildFlavor` registry, `AppEnvironment` composition root, full `NavigationSplitView` app (Dashboard, Developer Tools, Mobile Dev, Power User, Quarantine, Remote Control, Settings, onboarding). **14 tests.** |
+| App/ | `project.yml` (xcodegen) generating `MCleanPro-AppStore` (sandboxed) and `MCleanPro-DeveloperID` (unsandboxed, hardened runtime) — both verified to build with `xcodebuild`. |
+| PrivilegedHelper/, Scripts/ | Directory scaffolding only — no executable/build scripts yet. |
+
+**Known gap:** the core "System Junk" cleaning module from the product
+spec (§5.1 — system/user cache cleanup, trash bins, large & old files
+finder, duplicate finder, uninstaller, privacy cleaner, maintenance
+scripts, Space Lens, shredder) has no dedicated package. `MainAppUI`'s
+Dashboard shows an honest placeholder for it rather than faking results.
+This is the single largest remaining scope item from the original spec.
 
 ## Checkpoints (PROMPT MASTER §10) — decisions log
 

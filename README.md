@@ -6,11 +6,15 @@ artifacts left behind by common dev toolchains (Python, Node, Rust, Go,
 Ruby, Java/Gradle, Docker, Xcode, Android, ...) and helps you reclaim disk
 space safely.
 
-> **Status:** early scaffolding. This repository currently contains the
-> module structure, shared protocols, and safety-critical interfaces. Most
-> packages are placeholders — see `ARCHITECTURE.md` for what's built vs.
-> planned, and the per-phase status reports in git history / conversation
-> for the current build plan.
+> **Status:** all planned modules are implemented and tested (246 tests
+> passing across 11 packages), and both app targets (`MCleanPro-AppStore`,
+> `MCleanPro-DeveloperID`) build successfully via `xcodegen`. What's *not*
+> built yet: the core "System Junk" cleaners (§5.1 of the product spec —
+> trash bins, large/old files, duplicates), a concrete `VirusTotalClient`
+> network implementation, the `PrivilegedHelper` executable itself, and
+> real code-signing/notarization. See `ARCHITECTURE.md`'s status table for
+> the module-by-module detail and `TESTING.md` for the manual checklist
+> items that can't be automated (pairing flow, permission onboarding).
 
 ## Non-negotiable safety principles
 
@@ -36,15 +40,31 @@ Scripts/                  Build / notarization / dev scripts
 
 ## Building
 
-Each package under `Packages/` builds independently:
+Each package under `Packages/` builds and tests independently:
 
 ```sh
-cd Packages/CoreScanEngine && swift build
+cd Packages/CoreScanEngine && swift build && swift test
 ```
 
-The full app (Xcode project/workspace tying the packages + App targets
-together) has not been generated yet — see `ARCHITECTURE.md` for the
-planned target setup (`MCleanPro-AppStore`, `MCleanPro-DeveloperID`).
+To build the actual app (requires [xcodegen](https://github.com/yonaskolb/XcodeGen), `brew install xcodegen`):
+
+```sh
+cd App
+xcodegen generate
+xcodebuild -project MCleanPro.xcodeproj -scheme MCleanPro-DeveloperID -configuration Debug build
+xcodebuild -project MCleanPro.xcodeproj -scheme MCleanPro-AppStore -configuration Debug build
+```
+
+Local builds skip code signing (`CODE_SIGN_IDENTITY: "-"`) so this works
+without an Apple Developer Team ID — that's a dev convenience, not a
+notarization setup. `App/MCleanPro.xcodeproj` is generated and gitignored;
+regenerate it any time with `xcodegen generate`, don't hand-edit it.
+
+## Testing
+
+See `TESTING.md` for the full picture: what's covered by the 246 automated
+tests, and the manual checklist for the parts that aren't (remote pairing,
+permission onboarding).
 
 ## License
 
