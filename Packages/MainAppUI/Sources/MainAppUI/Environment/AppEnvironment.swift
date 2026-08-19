@@ -1,18 +1,23 @@
 import AppKit
+import CacheCleaner
 import CoreScanEngine
 import DevToolsDetectors
 import DuplicateFinder
 import Foundation
 import LargeOldFilesFinder
+import MaintenanceScripts
 import MenuBarAgent
 import MobileDevDetectors
 import Observation
+import Optimization
 import PowerUserInspectors
+import PrivacyCleaner
 import PrivilegedHelperXPC
 import RemoteControlServer
 import SafetyRules
 import Shredder
 import TrashCleaner
+import Uninstaller
 import VirusTotalClient
 
 /// Single composition root shared by both Xcode app targets
@@ -50,6 +55,43 @@ public final class AppEnvironment {
     /// pipeline; only `ShredderView`'s explicit, double-confirmed user
     /// action calls into this.
     public let shredder = Shredder()
+
+    /// Per-app "find related files" service (Phase 6). Not a `Detector` —
+    /// invoked on demand from `UninstallerView` for one app the user
+    /// explicitly picked, never as part of a routine scan. Its output is
+    /// plain `ScanItem`s, so the same `QuarantineConfirmationSheet` ->
+    /// `FileSystemQuarantineManager` flow used everywhere else handles
+    /// preview/confirmation/removal identically here.
+    public let uninstallerService = UninstallerService()
+
+    /// Installed-app inventory for `UninstallerView`'s app picker — the same
+    /// inspector `PowerUserInspectorRegistry`'s `InstalledAppsDetector`
+    /// wraps for the routine scan pipeline, called directly here since the
+    /// Uninstaller flow needs the full `InstalledApp` value (bundle
+    /// identifier, version, ...), not just a `ScanItem`.
+    public let installedAppsInspector = InstalledAppsInspector()
+
+    /// Every maintenance action this build offers (Phase 6) — flush DNS,
+    /// rebuild Spotlight index, verify startup disk, clear font cache. Each
+    /// only ever runs from an explicit user tap in `MaintenanceView`, never
+    /// automatically; see `MaintenanceTask`'s doc comment for why these
+    /// bypass `SafetyRules`/quarantine entirely (fixed command set, no
+    /// arbitrary path).
+    public let maintenanceTasks: [any MaintenanceTask] = MaintenanceScriptsRegistry.all()
+
+    /// Sites the user wants preserved when `PrivacyCleaner`'s detectors run
+    /// — honored at file/directory granularity where the underlying browser
+    /// storage actually supports it (see `PrivacyCleanerRegistry`'s doc
+    /// comment). `ScanEngine.register` is append-only with no way to
+    /// unregister/replace a detector (see `registerDefaultDetectors`'s doc
+    /// comment), so this is read once at `registerDefaultDetectors()` time
+    /// and baked into the registered `PrivacyCleaner` detectors for this
+    /// `AppEnvironment`'s lifetime — set it (empty by default) before
+    /// `bootstrap()` if you want a non-empty starting list. A Settings UI
+    /// for editing this live (which would need re-constructing the
+    /// `AppEnvironment`, not mutating this in place) is deferred; see
+    /// `ARCHITECTURE.md`.
+    public var privacySitePreserveList = SitePreserveList()
 
     /// `nil` in the App Store flavor — see `Capabilities.canRunRemoteControlServer`.
     /// Constructed at `init` time (not started) when the capability is on;
@@ -121,16 +163,23 @@ public final class AppEnvironment {
 
     /// Registers every detector this app ships with `scanEngine`:
     /// `DevToolsDetectorRegistry.all()`, `MobileDevDetectorRegistry
-    /// .allDetectors()`, `PowerUserInspectorRegistry.allDetectors()`, and
-    /// (Phase 5, closing product spec §5.1) `TrashCleanerRegistry.all()`,
-    /// `LargeOldFilesFinder()`, `DuplicateFinderRegistry.all()`. Idempotent
-    /// only in the sense that calling it twice registers detectors twice
-    /// (matching `ScanEngine.register`'s own append-only semantics) — call
-    /// once per `AppEnvironment` instance, normally via `bootstrap()`.
+    /// .allDetectors()`, `PowerUserInspectorRegistry.allDetectors()`,
+    /// (Phase 5) `TrashCleanerRegistry.all()`, `LargeOldFilesFinder()`,
+    /// `DuplicateFinderRegistry.all()`, and (Phase 6, closing the rest of
+    /// product spec §5.1) `CacheCleanerRegistry.all()`,
+    /// `OptimizationRegistry.all()`, `PrivacyCleanerRegistry.all(preserveList:)`.
+    /// Idempotent only in the sense that calling it twice registers
+    /// detectors twice (matching `ScanEngine.register`'s own append-only
+    /// semantics) — call once per `AppEnvironment` instance, normally via
+    /// `bootstrap()`.
     ///
-    /// `Shredder` is deliberately never registered here — it is not a
-    /// `Detector` and must never be reachable from the scan pipeline; see
-    /// `shredder`'s doc comment.
+    /// Deliberately never registered here, because none of these are
+    /// `Detector`s / must never be reachable from the routine scan
+    /// pipeline: `Shredder` (explicit user action only, see its doc
+    /// comment), `Uninstaller` (per-app, on-demand — see
+    /// `uninstallerService`), `MaintenanceScripts` (fixed action set, not
+    /// file discovery — see `maintenanceTasks`), `SpaceLens` (pure
+    /// visualization, produces no `ScanItem`s at all).
     public func registerDefaultDetectors() async {
         await scanEngine.register(DevToolsDetectorRegistry.all())
         await scanEngine.register(MobileDevDetectorRegistry.allDetectors())
@@ -138,6 +187,9 @@ public final class AppEnvironment {
         await scanEngine.register(TrashCleanerRegistry.all())
         await scanEngine.register([LargeOldFilesFinder()])
         await scanEngine.register(DuplicateFinderRegistry.all())
+        await scanEngine.register(CacheCleanerRegistry.all())
+        await scanEngine.register(OptimizationRegistry.all())
+        await scanEngine.register(PrivacyCleanerRegistry.all(preserveList: privacySitePreserveList))
     }
 
     // MARK: - Scanning

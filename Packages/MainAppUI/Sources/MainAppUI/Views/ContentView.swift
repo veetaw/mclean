@@ -1,3 +1,4 @@
+import SpaceLens
 import SwiftUI
 import UIDesignSystem
 
@@ -86,6 +87,26 @@ public struct ContentView: View {
                 emptyStateMessage: "No inventory yet. Rescan to list installed applications.",
                 detectorIDs: FeatureDetectorIDs.powerUser
             )
+        case .optimization:
+            FindingsListView(
+                title: "Optimization",
+                systemImage: "bolt",
+                emptyStateMessage: "No Launch Agents found yet. Rescan to review what runs at login.",
+                detectorIDs: FeatureDetectorIDs.optimization
+            )
+        case .privacy:
+            FindingsListView(
+                title: "Privacy",
+                systemImage: "hand.raised",
+                emptyStateMessage: "No browser cache/cookie/history data found yet. Rescan to check Safari, Chrome, and Firefox.",
+                detectorIDs: FeatureDetectorIDs.privacy
+            )
+        case .uninstaller:
+            UninstallerView()
+        case .maintenance:
+            MaintenanceView()
+        case .spaceLens:
+            SpaceLensView()
         case .quarantine:
             QuarantineView()
         case .shredder:

@@ -33,7 +33,13 @@ let package = Package(
         .package(path: "../TrashCleaner"),
         .package(path: "../LargeOldFilesFinder"),
         .package(path: "../DuplicateFinder"),
-        .package(path: "../Shredder")
+        .package(path: "../Shredder"),
+        .package(path: "../CacheCleaner"),
+        .package(path: "../Uninstaller"),
+        .package(path: "../Optimization"),
+        .package(path: "../PrivacyCleaner"),
+        .package(path: "../MaintenanceScripts"),
+        .package(path: "../SpaceLens")
     ],
     targets: [
         .target(
@@ -52,7 +58,13 @@ let package = Package(
                 "TrashCleaner",
                 "LargeOldFilesFinder",
                 "DuplicateFinder",
-                "Shredder"
+                "Shredder",
+                "CacheCleaner",
+                "Uninstaller",
+                "Optimization",
+                "PrivacyCleaner",
+                "MaintenanceScripts",
+                "SpaceLens"
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
