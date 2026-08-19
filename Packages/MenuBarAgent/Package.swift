@@ -15,7 +15,14 @@ let package = Package(
         .target(
             name: "MenuBarAgent",
             dependencies: ["CoreScanEngine", "SafetyRules"],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6)],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("SwiftUI"),
+                .linkedFramework("CoreServices"),
+                .linkedFramework("IOKit"),
+                .linkedFramework("UserNotifications")
+            ]
         ),
         .testTarget(
             name: "MenuBarAgentTests",
