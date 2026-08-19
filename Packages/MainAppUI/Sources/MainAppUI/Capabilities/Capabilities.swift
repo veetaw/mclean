@@ -27,13 +27,14 @@ import Foundation
 ///   home directory and /Library" the way the Developer ID build does —
 ///   `canAccessOtherUsersFiles` and unrestricted filesystem scanning are
 ///   `false`.
-/// - A multi-pass "shred" (overwrite-then-delete) capability is not
-///   offered by this codebase at all today (`SafetyRules` only ever moves
-///   files into quarantine — see `FileSystemQuarantineManager`), but the
-///   product spec treats it as Developer-ID-only in spirit (it would need
-///   raw file I/O well outside sandbox norms), so `canRunShredder` is
-///   modeled here now, off in both flavors until such a capability is
-///   actually implemented, so the flag is ready the day it is.
+/// - `Shredder` (Phase 5) does raw POSIX `open`/`write`/`ftruncate` on a
+///   resolved absolute path, not through a persisted security-scoped
+///   bookmark — this hasn't been verified to behave correctly under the
+///   App Sandbox (a `.fileImporter`-granted URL's sandbox access and a raw
+///   path string handed to POSIX syscalls are not obviously the same
+///   thing), so `canRunShredder` stays Developer-ID-only until that's
+///   actually confirmed, matching the product spec's Developer-ID-only
+///   framing for a raw-file-I/O feature like this.
 /// - Reading another app's TCC grants (`PowerUserInspectors.TCCDatabaseReader`)
 ///   requires Full Disk Access to a file outside the sandbox container
 ///   entirely (`~/Library/Application Support/com.apple.TCC/TCC.db`) — not
@@ -50,9 +51,8 @@ public struct Capabilities: Sendable, Hashable {
     /// directories, arbitrary system paths) as opposed to user-selected
     /// files/folders granted through the sandbox.
     public let canAccessOtherUsersFiles: Bool
-    /// A future multi-pass secure-delete capability. Not implemented
-    /// anywhere in this codebase yet (see the type doc above) — modeled so
-    /// the gate exists ahead of the feature.
+    /// Multi-pass secure-delete (`Shredder`, Phase 5). Developer-ID-only —
+    /// see the type doc above for why.
     public let canRunShredder: Bool
     /// Reading `TCC.db` directly (`PowerUserInspectors.TCCDatabaseReader`).
     public let canReadTCCDatabase: Bool
@@ -80,7 +80,7 @@ public struct Capabilities: Sendable, Hashable {
             self.canInstallPrivilegedHelper = true
             self.canRunRemoteControlServer = true
             self.canAccessOtherUsersFiles = true
-            self.canRunShredder = false // not implemented anywhere yet; see type doc.
+            self.canRunShredder = true
             self.canReadTCCDatabase = true
             self.canRunMenuBarAgent = true
             self.canUseVirusTotalHashCheck = true

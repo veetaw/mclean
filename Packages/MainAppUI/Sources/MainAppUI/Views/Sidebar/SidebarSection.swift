@@ -10,6 +10,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     case mobileDev
     case powerUser
     case quarantine
+    case shredder
     case remoteControl
     case settings
 
@@ -23,6 +24,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .mobileDev: "Mobile Dev"
         case .powerUser: "Power User"
         case .quarantine: "Quarantine"
+        case .shredder: "Shredder"
         case .remoteControl: "Remote Control"
         case .settings: "Settings"
         }
@@ -36,6 +38,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .mobileDev: "iphone.gen3"
         case .powerUser: "wrench.and.screwdriver"
         case .quarantine: "xmark.bin"
+        case .shredder: "scissors"
         case .remoteControl: "wifi"
         case .settings: "gearshape"
         }

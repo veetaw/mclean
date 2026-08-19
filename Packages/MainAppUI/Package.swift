@@ -29,7 +29,11 @@ let package = Package(
         .package(path: "../RemoteControlServer"),
         .package(path: "../VirusTotalClient"),
         .package(path: "../PrivilegedHelperXPC"),
-        .package(path: "../UIDesignSystem")
+        .package(path: "../UIDesignSystem"),
+        .package(path: "../TrashCleaner"),
+        .package(path: "../LargeOldFilesFinder"),
+        .package(path: "../DuplicateFinder"),
+        .package(path: "../Shredder")
     ],
     targets: [
         .target(
@@ -44,7 +48,11 @@ let package = Package(
                 "RemoteControlServer",
                 "VirusTotalClient",
                 "PrivilegedHelperXPC",
-                "UIDesignSystem"
+                "UIDesignSystem",
+                "TrashCleaner",
+                "LargeOldFilesFinder",
+                "DuplicateFinder",
+                "Shredder"
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),

@@ -1,7 +1,9 @@
 import AppKit
 import CoreScanEngine
 import DevToolsDetectors
+import DuplicateFinder
 import Foundation
+import LargeOldFilesFinder
 import MenuBarAgent
 import MobileDevDetectors
 import Observation
@@ -9,6 +11,8 @@ import PowerUserInspectors
 import PrivilegedHelperXPC
 import RemoteControlServer
 import SafetyRules
+import Shredder
+import TrashCleaner
 import VirusTotalClient
 
 /// Single composition root shared by both Xcode app targets
@@ -39,6 +43,13 @@ public final class AppEnvironment {
     /// The only supported way this app changes a TCC grant: opens the
     /// relevant System Settings pane. See `PowerUserInspectors.TCCSettingsPaneOpener`.
     public let tccSettingsPaneOpener = TCCSettingsPaneOpener()
+
+    /// Secure multi-pass single-file deletion — the one deliberate
+    /// exception to the quarantine flow (see `Shredder`'s own doc comment
+    /// and `ARCHITECTURE.md`). Never reachable from the scan/findings
+    /// pipeline; only `ShredderView`'s explicit, double-confirmed user
+    /// action calls into this.
+    public let shredder = Shredder()
 
     /// `nil` in the App Store flavor — see `Capabilities.canRunRemoteControlServer`.
     /// Constructed at `init` time (not started) when the capability is on;
@@ -108,16 +119,25 @@ public final class AppEnvironment {
         return environment
     }
 
-    /// Registers `DevToolsDetectorRegistry.all() + MobileDevDetectorRegistry
-    /// .allDetectors() + PowerUserInspectorRegistry.allDetectors()` with
-    /// `scanEngine`. Idempotent only in the sense that calling it twice
-    /// registers detectors twice (matching `ScanEngine.register`'s own
-    /// append-only semantics) — call once per `AppEnvironment` instance,
-    /// normally via `bootstrap()`.
+    /// Registers every detector this app ships with `scanEngine`:
+    /// `DevToolsDetectorRegistry.all()`, `MobileDevDetectorRegistry
+    /// .allDetectors()`, `PowerUserInspectorRegistry.allDetectors()`, and
+    /// (Phase 5, closing product spec §5.1) `TrashCleanerRegistry.all()`,
+    /// `LargeOldFilesFinder()`, `DuplicateFinderRegistry.all()`. Idempotent
+    /// only in the sense that calling it twice registers detectors twice
+    /// (matching `ScanEngine.register`'s own append-only semantics) — call
+    /// once per `AppEnvironment` instance, normally via `bootstrap()`.
+    ///
+    /// `Shredder` is deliberately never registered here — it is not a
+    /// `Detector` and must never be reachable from the scan pipeline; see
+    /// `shredder`'s doc comment.
     public func registerDefaultDetectors() async {
         await scanEngine.register(DevToolsDetectorRegistry.all())
         await scanEngine.register(MobileDevDetectorRegistry.allDetectors())
         await scanEngine.register(PowerUserInspectorRegistry.allDetectors())
+        await scanEngine.register(TrashCleanerRegistry.all())
+        await scanEngine.register([LargeOldFilesFinder()])
+        await scanEngine.register(DuplicateFinderRegistry.all())
     }
 
     // MARK: - Scanning

@@ -19,8 +19,11 @@ public struct ContentView: View {
 
     private var visibleSections: [SidebarSection] {
         SidebarSection.allCases.filter { section in
-            guard section == .remoteControl else { return true }
-            return environment.capabilities.canRunRemoteControlServer
+            switch section {
+            case .remoteControl: environment.capabilities.canRunRemoteControlServer
+            case .shredder: environment.capabilities.canRunShredder
+            default: true
+            }
         }
     }
 
@@ -56,7 +59,12 @@ public struct ContentView: View {
         case .dashboard:
             DashboardView()
         case .systemJunk:
-            SystemJunkPlaceholderView()
+            FindingsListView(
+                title: "System Junk",
+                systemImage: "trash",
+                emptyStateMessage: "No trash, large/old files, or duplicates found yet. Rescan to check Finder Trash, Mail/Photos trash, Downloads/Desktop/Documents for large or old files, and exact/similar duplicates.",
+                detectorIDs: FeatureDetectorIDs.systemJunk
+            )
         case .devTools:
             FindingsListView(
                 title: "Developer Tools",
@@ -80,6 +88,8 @@ public struct ContentView: View {
             )
         case .quarantine:
             QuarantineView()
+        case .shredder:
+            ShredderView()
         case .remoteControl:
             RemoteControlView()
         case .settings:

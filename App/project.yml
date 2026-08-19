@@ -43,6 +43,14 @@ packages:
     path: ../Packages/UIDesignSystem
   MainAppUI:
     path: ../Packages/MainAppUI
+  TrashCleaner:
+    path: ../Packages/TrashCleaner
+  LargeOldFilesFinder:
+    path: ../Packages/LargeOldFilesFinder
+  DuplicateFinder:
+    path: ../Packages/DuplicateFinder
+  Shredder:
+    path: ../Packages/Shredder
 
 # Settings shared by both app targets, layered under each target's own
 # `settings.base` below. Real macOS-26-only requirement (per the product
@@ -113,6 +121,10 @@ targets:
       - package: PrivilegedHelperXPC
       - package: UIDesignSystem
       - package: MainAppUI
+      - package: TrashCleaner
+      - package: LargeOldFilesFinder
+      - package: DuplicateFinder
+      - package: Shredder
 
   MCleanPro-DeveloperID:
     templates: [MCleanProAppTemplate]
@@ -145,3 +157,7 @@ targets:
       - package: PrivilegedHelperXPC
       - package: UIDesignSystem
       - package: MainAppUI
+      - package: TrashCleaner
+      - package: LargeOldFilesFinder
+      - package: DuplicateFinder
+      - package: Shredder

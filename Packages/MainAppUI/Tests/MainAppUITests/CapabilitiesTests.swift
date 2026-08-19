@@ -30,14 +30,16 @@ final class CapabilitiesTests: XCTestCase {
         XCTAssertTrue(capabilities.canReadTCCDatabase)
         XCTAssertTrue(capabilities.canRunMenuBarAgent)
         XCTAssertTrue(capabilities.canUseVirusTotalHashCheck)
+        XCTAssertTrue(capabilities.canRunShredder)
     }
 
-    func testShredderIsOffInBothFlavors() {
-        // Not implemented anywhere in this codebase yet -- see the type
-        // doc comment on `Capabilities`. Modeled ahead of the feature so
-        // the gate exists the day it's implemented.
+    func testShredderIsDeveloperIDOnly() {
+        // Shredder (Phase 5) does raw POSIX file I/O on a resolved path
+        // rather than through a persisted security-scoped bookmark, which
+        // hasn't been verified to behave correctly under the App Sandbox --
+        // see the type doc comment on `Capabilities`.
         XCTAssertFalse(Capabilities(flavor: .appStore).canRunShredder)
-        XCTAssertFalse(Capabilities(flavor: .developerID).canRunShredder)
+        XCTAssertTrue(Capabilities(flavor: .developerID).canRunShredder)
     }
 
     func testCurrentResolvesToDeveloperIDInAPlainSwiftTestInvocation() {
