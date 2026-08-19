@@ -1,7 +1,10 @@
-/// Placeholder so this target builds before `Agent:MaintenanceScripts`
-/// (Phase 6) fills it in — flush DNS, rebuild Spotlight index, repair
-/// permissions, clear font cache. Explicit, described, never automatic.
-/// See PROMPT MASTER §5.1.
-public enum MaintenanceScriptsModule {
-    public static let placeholder = true
-}
+/// `MaintenanceScripts` — PROMPT MASTER §5.1's "Maintenance scripts": flush
+/// DNS, rebuild the Spotlight index, verify the startup disk (the honest
+/// modern equivalent of "repair permissions"), and clear the font cache.
+///
+/// Each task is a fixed, reviewed, hardcoded command invocation, described
+/// to the user before it can be triggered, and only ever run from an
+/// explicit user tap — see `MaintenanceTask`'s doc comment for the full
+/// rationale on why this doesn't go through `SafetyRules`/quarantine, and
+/// `MaintenanceScriptsRegistry` for how the app layer lists every task.
+public enum MaintenanceScriptsModule {}
