@@ -35,7 +35,14 @@ struct MCleanProAppStoreApp: App {
                         }
                 }
             }
+            // Floor for `.windowResizability(.contentSize)` below: keeps the
+            // ~220pt sidebar (see ContentView's navigationSplitViewColumnWidth)
+            // plus a usable detail pane (FindingsListView rows, SpaceLensView's
+            // treemap) from being squeezed below a readable width/height.
+            // Kept consistent with the DeveloperID target's window sizing.
+            .frame(minWidth: 900, minHeight: 600)
         }
+        .defaultSize(width: 1120, height: 760)
         .windowResizability(.contentSize)
     }
 }

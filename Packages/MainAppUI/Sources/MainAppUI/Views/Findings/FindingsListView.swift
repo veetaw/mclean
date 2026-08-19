@@ -26,7 +26,23 @@ struct FindingsListView: View {
     @State private var findings: [ScanFinding] = []
     @State private var isScanning = false
     @State private var lastScanFinishedAt: Date?
-    @State private var pendingQuarantine: [ScanFinding]?
+    // Stores the `Identifiable` sheet item itself (created once, at the
+    // moment the user taps an action), not just the raw `[ScanFinding]`
+    // batch. Previously this was `[ScanFinding]?` and `.sheet(item:)` was
+    // fed through a computed `Binding` whose `get` closure ran
+    // `pendingQuarantine.map(QuarantineBatch.init)` — `QuarantineBatch.init`
+    // assigns `id = UUID()`, so *every* SwiftUI body re-evaluation while the
+    // sheet was open (e.g. `isQuarantining` flipping to true the instant the
+    // user tapped "Move to Quarantine") produced a fresh random id for the
+    // "same" batch. `.sheet(item:)` uses that id to decide whether it's
+    // still showing the same sheet or swapping to a new one, so the sheet
+    // could flicker/reset (or, on some SwiftUI versions, silently fail to
+    // reflect the in-progress state) right at the moment of confirmation.
+    // Storing the already-identified batch directly in `@State` and binding
+    // to it with plain `$pendingQuarantine` gives the sheet a stable id for
+    // as long as the same batch is pending, regardless of how many times
+    // this view's body re-evaluates in between.
+    @State private var pendingQuarantine: QuarantineBatch?
     @State private var isQuarantining = false
     @State private var errorMessage: String?
 
@@ -42,7 +58,7 @@ struct FindingsListView: View {
         }
         .padding(DSSpacing.xLarge)
         .task { await refresh() }
-        .sheet(item: pendingQuarantineBinding) { batch in
+        .sheet(item: $pendingQuarantine) { batch in
             QuarantineConfirmationSheet(
                 findings: batch.findings,
                 isWorking: isQuarantining,
@@ -74,7 +90,7 @@ struct FindingsListView: View {
 
                     if !safeAutoEligible.isEmpty {
                         Button("Clean Safe Items (\(safeAutoEligible.count))", systemImage: "checkmark.seal") {
-                            pendingQuarantine = safeAutoEligible
+                            pendingQuarantine = QuarantineBatch(findings: safeAutoEligible)
                         }
                         .dsButtonStyle(.primary)
                         .disabled(isScanning)
@@ -131,7 +147,7 @@ struct FindingsListView: View {
                             actionLabel: finding.verdict.isEligibleForQuarantine ? "Quarantine" : "Locked",
                             actionVariant: finding.verdict.isEligibleForQuarantine ? .secondary : .destructive
                         ) {
-                            pendingQuarantine = [finding]
+                            pendingQuarantine = QuarantineBatch(findings: [finding])
                         }
                         .disabled(!finding.verdict.isEligibleForQuarantine)
 
@@ -216,13 +232,6 @@ struct FindingsListView: View {
     private struct QuarantineBatch: Identifiable {
         let id = UUID()
         let findings: [ScanFinding]
-    }
-
-    private var pendingQuarantineBinding: Binding<QuarantineBatch?> {
-        Binding(
-            get: { pendingQuarantine.map(QuarantineBatch.init) },
-            set: { pendingQuarantine = $0?.findings }
-        )
     }
 
     private var errorAlertBinding: Binding<Bool> {

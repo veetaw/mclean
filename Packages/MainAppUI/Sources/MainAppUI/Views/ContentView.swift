@@ -31,8 +31,25 @@ public struct ContentView: View {
     public var body: some View {
         NavigationSplitView {
             List(visibleSections, selection: $selection) { section in
+                // BUG FIX (only Dashboard ever showed in the detail pane):
+                // this row used to tag itself `.tag(section as SidebarSection?)`.
+                // `List<SelectionValue, Content>`'s `SelectionValue` generic is
+                // inferred as the *non-optional* `SidebarSection` from
+                // `$selection`'s `Binding<SidebarSection?>` (the data-driven
+                // `List(_:selection:rowContent:)` initializer used here just
+                // wraps the base `List(selection: Binding<SelectionValue?>?,
+                // content:)` init, so `SelectionValue == SidebarSection`, not
+                // `SidebarSection?`). Tagging the row with `SidebarSection?`
+                // (i.e. `Optional<SidebarSection>`) made SwiftUI compare tags
+                // of a different `Hashable` type than `SelectionValue` — the
+                // trait match silently failed on every tap, so `selection`
+                // never changed away from its `.dashboard` initial value and
+                // `detailView(for:)` kept rendering `DashboardView()` no
+                // matter which row was clicked. Tagging with the plain,
+                // non-optional `section` matches `SelectionValue` exactly and
+                // lets List's built-in tap-to-selection wiring work.
                 Label(section.title, systemImage: section.systemImage)
-                    .tag(section as SidebarSection?)
+                    .tag(section)
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220)
         } detail: {
@@ -54,11 +71,25 @@ public struct ContentView: View {
         }
     }
 
+    // `internal` (not `private`) so `MainAppUITests` can call this directly
+    // via `@testable import` and assert every `SidebarSection` routes to a
+    // distinct, non-crashing detail view — see
+    // `ContentViewDetailRoutingTests`. The switch below is already
+    // compiler-enforced exhaustive (no `default:` case), which is the real
+    // guard against a *missing* case; the test instead guards against a
+    // present-but-wrong case (e.g. two sections copy-pasted to the same
+    // view), the shape of bug that this method's own exhaustiveness check
+    // can't catch.
     @ViewBuilder
-    private func detailView(for section: SidebarSection) -> some View {
+    func detailView(for section: SidebarSection) -> some View {
         switch section {
         case .dashboard:
-            DashboardView()
+            // `$selection` lets the Dashboard's per-category breakdown rows
+            // jump straight to the relevant sidebar section — see
+            // `DashboardView`'s doc comment for why this exists (the root
+            // cause of "Scan Everything finds GB of data but nothing is
+            // clickable").
+            DashboardView(selection: $selection)
         case .systemJunk:
             FindingsListView(
                 title: "System Junk",
