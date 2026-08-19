@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MClean Pro Remote</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">MClean Pro</span>
+    <span id="connection-pill" class="pill" hidden></span>
+  </header>
+
+  <main id="app">
+    <!-- Pairing screen -->
+    <section id="pairing-view" class="view">
+      <h1>Pair with your Mac</h1>
+      <p class="hint">
+        On your Mac, open MClean Pro &rarr; Remote Control &rarr; Pair a Device,
+        then either scan the QR code it shows or copy the pairing code below.
+      </p>
+
+      <form id="pairing-form">
+        <label for="pairing-token">Pairing code</label>
+        <input id="pairing-token" name="pairing-token" type="text" inputmode="text"
+               autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="Paste or type the code from your Mac" required />
+
+        <label for="device-name">This device's name</label>
+        <input id="device-name" name="device-name" type="text" autocomplete="off"
+               placeholder="e.g. Vito's iPhone" />
+
+        <details id="advanced-details">
+          <summary>Server address (advanced)</summary>
+          <label for="api-base">Only needed if this page wasn't opened directly from your Mac</label>
+          <input id="api-base" name="api-base" type="text" autocomplete="off"
+                 placeholder="http://192.168.1.23:8080" />
+        </details>
+
+        <button type="submit">Pair</button>
+      </form>
+
+      <p class="hint scan-stub-note">
+        <!-- Camera-based QR scanning is not implemented yet — this text
+             field is the whole pairing UI for now. Follow-up: read the
+             camera via getUserMedia + a QR decoder and auto-fill the token
+             field above. -->
+        Camera QR scanning isn't available in this build yet — type or paste
+        the code shown on your Mac instead.
+      </p>
+
+      <p id="pairing-error" class="error" role="alert" hidden></p>
+    </section>
+
+    <!-- Main (status + findings) screen -->
+    <section id="main-view" class="view" hidden>
+      <div class="status-card">
+        <div class="status-row">
+          <div class="stat">
+            <span class="stat-label">Free space</span>
+            <span id="stat-free" class="stat-value">&mdash;</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Reclaimable</span>
+            <span id="stat-reclaimable" class="stat-value">&mdash;</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">In quarantine</span>
+            <span id="stat-quarantine" class="stat-value">&mdash;</span>
+          </div>
+        </div>
+        <p id="stat-last-scan" class="hint">Last scan: &mdash;</p>
+      </div>
+
+      <div class="toolbar">
+        <h2>Findings</h2>
+        <button id="refresh-button" type="button" title="Refresh">Refresh</button>
+      </div>
+
+      <ul id="findings-list" class="findings-list"></ul>
+      <p id="findings-empty" class="hint" hidden>No findings yet — run a scan on your Mac.</p>
+      <p id="findings-error" class="error" role="alert" hidden></p>
+
+      <button id="unpair-button" type="button" class="unpair">Unpair this device</button>
+    </section>
+  </main>
+
+  <script src="/src/app.js"></script>
+</body>
+</html>

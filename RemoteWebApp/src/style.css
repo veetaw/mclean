@@ -1,0 +1,359 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f4f4f7;
+  --surface: #ffffff;
+  --text: #1c1c1e;
+  --text-muted: #6b6b70;
+  --border: #e3e3e8;
+  --accent: #0a84ff;
+  --accent-contrast: #ffffff;
+  --danger: #ff3b30;
+  --danger-bg: #fdeceb;
+  --warn: #b8790a;
+  --warn-bg: #fff4e0;
+  --safe: #1e8e3e;
+  --safe-bg: #e7f7ec;
+  --radius: 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0e10;
+    --surface: #1c1c1e;
+    --text: #f2f2f3;
+    --text-muted: #9a9aa0;
+    --border: #2e2e31;
+    --accent: #0a84ff;
+    --accent-contrast: #ffffff;
+    --danger: #ff453a;
+    --danger-bg: #3a1210;
+    --warn: #e0a521;
+    --warn-bg: #332a0c;
+    --safe: #34c759;
+    --safe-bg: #0f2a17;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  position: sticky;
+  top: 0;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.pill {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--safe-bg);
+  color: var(--safe);
+}
+
+.pill.offline {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+#app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px 16px 48px;
+}
+
+.view h1 {
+  font-size: 1.4rem;
+  margin: 8px 0 4px;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+
+input[type="text"] {
+  font-size: 1rem;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+}
+
+input[type="text"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+details {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+details summary {
+  cursor: pointer;
+}
+
+button {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+form button[type="submit"] {
+  margin-top: 18px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.scan-stub-note {
+  margin-top: 14px;
+}
+
+.status-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.status-row {
+  display: flex;
+  gap: 12px;
+}
+
+.stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+#stat-last-scan {
+  margin: 12px 0 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 22px;
+}
+
+.toolbar h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+#refresh-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.findings-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.finding-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.finding-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.finding-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+
+.finding-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.badge-forbidden {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge-needs-confirmation {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.badge-safe-auto {
+  background: var(--safe-bg);
+  color: var(--safe);
+}
+
+.finding-reason {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.finding-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.finding-actions button {
+  flex: 1;
+  font-size: 0.85rem;
+  padding: 9px 10px;
+}
+
+.btn-approve {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-reject {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.finding-status {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.finding-status.status-fulfilled {
+  background: var(--safe-bg);
+  color: var(--safe);
+}
+
+.finding-status.status-failed {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.finding-status.status-rejected {
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+#unpair-button {
+  display: block;
+  width: 100%;
+  margin-top: 28px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--danger);
+}
+
+@media (min-width: 640px) {
+  #app {
+    padding-top: 24px;
+  }
+}
