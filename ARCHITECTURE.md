@@ -65,6 +65,42 @@ a preserve-list), **maintenance scripts** (flush DNS, rebuild Spotlight
 index, etc.), and **Space Lens** (interactive disk-usage treemap). No
 package implements any of these yet.
 
+## Non-boot volume handling — a bug fix caught while closing checkpoint 4
+
+**Before:** `Denylist.forbiddenPathPrefixes` included a bare `"/Volumes"`
+entry. `forbiddenReason(forPath:)` matched any path with that prefix, so
+**every file at any depth on any mounted external/network volume** was
+classified `.forbidden` — the strictest tier, meaning "never proposable
+for deletion anywhere in the UI, under any settings or advanced mode" (see
+the three-tier classification above). In practice this excluded external
+drives from cleanup entirely, including manual, explicitly-confirmed
+actions — stricter than intended, and inconsistent with the inline
+comment's own stated intent ("not arbitrary user files within a mounted
+volume").
+
+**After:** the bare `"/Volumes"` entry is removed. Volume *roots* (the
+mount point itself, e.g. `/Volumes/MyExternalDrive` as a single item) are
+still fully forbidden — via the separate, unchanged
+`isLikelyBootVolumeRoot` check, so a whole external volume can never be
+proposed for deletion as one unit. Ordinary files *within* a volume now
+reach normal classification (denylist patterns/credentials/dirty-git-repo
+checks still apply where relevant, then rule matching). Separately,
+`Denylist.isOnNonBootVolume(path)` — checked only by `SafetyClassifier` —
+downgrades a would-be `safeAuto` verdict to `needsConfirmation` for
+anything outside the boot volume; it never affects an item that would
+already be `needsConfirmation`, and never touches `forbidden` verdicts.
+
+**Confirms the original intent** (checkpoint 4: "mai proporre pulizia
+automatica fuori dal disco di boot"): auto-clean (`safeAuto`) is still
+never possible for external/network volumes (`testNonBootVolumeDowngradesSafeAutoToNeedsConfirmation`,
+`Packages/SafetyRules/Tests/SafetyRulesTests/SafetyClassifierRuleMatchingTests.swift`);
+scanning/reporting is unaffected (detectors never consult the denylist —
+only `SafetyClassifier` does, downstream of detection); manual,
+per-item-confirmed cleanup is now correctly available, which the bug had
+wrongly blocked
+(`testExternalVolumeIsNotForbiddenButIsFlaggedNonBoot`,
+`Packages/SafetyRules/Tests/SafetyRulesTests/DenylistCheckpoint4Tests.swift`).
+
 ## Shredder: the quarantine exception
 
 Every other destructive-adjacent path in this app — every detector's
