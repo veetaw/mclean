@@ -14,12 +14,35 @@ struct SettingsView: View {
                 Label("Settings", systemImage: "gearshape")
                     .font(DSTypography.largeTitle)
 
+                if let warning = environment.safetyRulesIntegrityWarning {
+                    safetyRulesWarningCard(warning)
+                }
                 buildInfoCard
                 quarantineCard
                 permissionsCard
                 virusTotalCard
             }
             .padding(DSSpacing.xLarge)
+        }
+    }
+
+    /// Checkpoint 4: "mostra un warning visibile in Settings" — shown
+    /// whenever `official_rules.yaml`'s integrity check failed or either
+    /// rule file failed to parse. Every affected official safe-auto rule
+    /// is already downgraded to needs-confirmation by `SafetyClassifier`
+    /// before this view ever renders, so nothing is at risk while this
+    /// banner is visible — it's a transparency notice, not a blocking error.
+    private func safetyRulesWarningCard(_ warning: String) -> some View {
+        GlassCard(tint: DSColor.warning.opacity(0.5)) {
+            VStack(alignment: .leading, spacing: DSSpacing.xSmall) {
+                Label("Safety rules warning", systemImage: "exclamationmark.triangle.fill")
+                    .font(DSTypography.heading)
+                    .foregroundStyle(DSColor.warning)
+                Text(warning)
+                    .font(DSTypography.subheading)
+                    .foregroundStyle(DSColor.textSecondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

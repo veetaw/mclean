@@ -6,8 +6,12 @@ import XCTest
 /// Exercises `AppEnvironment`'s composition without touching live AppKit
 /// (no `MenuBarController` is ever constructed here -- see
 /// `AppEnvironment.activateMenuBarAgent()`'s doc comment for why that's a
-/// separate, explicit step) and without scanning the real filesystem
-/// (`runFullScan` is always called with a temp-directory root).
+/// separate, explicit step), without scanning the real filesystem
+/// (`runFullScan` is always called with a temp-directory root), and without
+/// touching the real `~/Library/Application Support/MCleanPro/user_rules.yaml`
+/// (every `AppEnvironment`/`bootstrap` call here passes a temp
+/// `userRulesDirectory` -- omitting it would make `RuleFileLoader` create a
+/// real file on whatever machine runs this suite).
 @MainActor
 final class AppEnvironmentTests: XCTestCase {
     private func makeTempQuarantineRoot() -> URL {
@@ -20,7 +24,8 @@ final class AppEnvironmentTests: XCTestCase {
     func testRemoteControlServerIsNilInAppStoreFlavor() {
         let environment = AppEnvironment(
             capabilities: Capabilities(flavor: .appStore),
-            quarantineRootURL: makeTempQuarantineRoot()
+            quarantineRootURL: makeTempQuarantineRoot(),
+            userRulesDirectory: makeTempQuarantineRoot()
         )
         XCTAssertNil(environment.remoteControlServer)
     }
@@ -28,7 +33,8 @@ final class AppEnvironmentTests: XCTestCase {
     func testRemoteControlServerIsConstructedInDeveloperIDFlavor() {
         let environment = AppEnvironment(
             capabilities: Capabilities(flavor: .developerID),
-            quarantineRootURL: makeTempQuarantineRoot()
+            quarantineRootURL: makeTempQuarantineRoot(),
+            userRulesDirectory: makeTempQuarantineRoot()
         )
         XCTAssertNotNil(environment.remoteControlServer)
         XCTAssertFalse(environment.remoteControlServer!.isRunning, "constructing the server must never auto-start it")
@@ -37,7 +43,8 @@ final class AppEnvironmentTests: XCTestCase {
     func testMenuBarControllerIsNilUntilExplicitlyActivated() {
         let environment = AppEnvironment(
             capabilities: .current,
-            quarantineRootURL: makeTempQuarantineRoot()
+            quarantineRootURL: makeTempQuarantineRoot(),
+            userRulesDirectory: makeTempQuarantineRoot()
         )
         XCTAssertNil(environment.menuBarController, "AppEnvironment must not construct AppKit UI as a side effect of init")
     }
@@ -45,7 +52,8 @@ final class AppEnvironmentTests: XCTestCase {
     func testBootstrapRegistersEveryDefaultDetector() async {
         let environment = await AppEnvironment.bootstrap(
             capabilities: .current,
-            quarantineRootURL: makeTempQuarantineRoot()
+            quarantineRootURL: makeTempQuarantineRoot(),
+            userRulesDirectory: makeTempQuarantineRoot()
         )
 
         // Scope the scan to an empty temp directory (not the real home
@@ -64,7 +72,8 @@ final class AppEnvironmentTests: XCTestCase {
     func testRunFullScanClassifiesFindingsAndUpdatesTheSnapshotStore() async {
         let environment = await AppEnvironment.bootstrap(
             capabilities: .current,
-            quarantineRootURL: makeTempQuarantineRoot()
+            quarantineRootURL: makeTempQuarantineRoot(),
+            userRulesDirectory: makeTempQuarantineRoot()
         )
 
         let before = await environment.scanSnapshotStore.currentSnapshot()

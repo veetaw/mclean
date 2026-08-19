@@ -30,6 +30,12 @@ public final class AppEnvironment {
     public let quarantineManager: QuarantineManaging
     public let scanSnapshotStore: ScanSnapshotStore
 
+    /// Non-nil when `official_rules.yaml`'s integrity check failed, or
+    /// either rule file failed to parse — surfaced as a visible warning in
+    /// `SettingsView` per checkpoint 4's closure. `nil` means everything
+    /// loaded cleanly (the common case).
+    public let safetyRulesIntegrityWarning: String?
+
     /// The only supported way this app changes a TCC grant: opens the
     /// relevant System Settings pane. See `PowerUserInspectors.TCCSettingsPaneOpener`.
     public let tccSettingsPaneOpener = TCCSettingsPaneOpener()
@@ -58,13 +64,16 @@ public final class AppEnvironment {
 
     public init(
         capabilities: Capabilities = .current,
-        quarantineRootURL: URL? = nil
+        quarantineRootURL: URL? = nil,
+        userRulesDirectory: URL? = nil
     ) {
         self.capabilities = capabilities
 
         let engine = ScanEngine()
         self.scanEngine = engine
-        self.safetyClassifier = SafetyClassifier()
+        let loadedRules = RuleFileLoader.load(userRulesDirectory: userRulesDirectory)
+        self.safetyClassifier = SafetyClassifier(rules: loadedRules.rules, integrityWarning: loadedRules.warning)
+        self.safetyRulesIntegrityWarning = loadedRules.warning
         let quarantine = FileSystemQuarantineManager(quarantineRootURL: quarantineRootURL)
         self.quarantineManager = quarantine
         self.scanSnapshotStore = ScanSnapshotStore()
@@ -87,9 +96,14 @@ public final class AppEnvironment {
     /// whenever they need detectors registered before the first scan.
     public static func bootstrap(
         capabilities: Capabilities = .current,
-        quarantineRootURL: URL? = nil
+        quarantineRootURL: URL? = nil,
+        userRulesDirectory: URL? = nil
     ) async -> AppEnvironment {
-        let environment = AppEnvironment(capabilities: capabilities, quarantineRootURL: quarantineRootURL)
+        let environment = AppEnvironment(
+            capabilities: capabilities,
+            quarantineRootURL: quarantineRootURL,
+            userRulesDirectory: userRulesDirectory
+        )
         await environment.registerDefaultDetectors()
         return environment
     }

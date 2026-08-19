@@ -1,0 +1,56 @@
+# MClean Pro — official safe-auto / needs-confirmation rules
+#
+# This file ships inside the app bundle (read-only) and is verified against
+# an expected SHA-256 hash embedded in the app binary — see
+# OfficialRulesIntegrity.swift. If this file is modified after install (by
+# a bug, disk corruption, or a malicious process), the app detects the
+# mismatch and disables every safe-auto rule sourced from this file rather
+# than trusting a file that no longer matches what shipped. An app update
+# overwrites this file; it never touches user_rules.yaml.
+#
+# This file can NEVER express "forbidden" — only "safe-auto" or
+# "needs-confirmation". The hardcoded, non-editable Denylist (see
+# Denylist.swift) is the only source of forbidden classifications, by
+# design, so nothing in this file (or in user_rules.yaml) can ever grant
+# access to a protected path.
+#
+# See SAFETY_RULES.md for the full format description and how user_rules.yaml
+# layers on top of this file (merge is conservative: if a rule in either
+# file matches an item as needs-confirmation, that wins over any safe-auto
+# match for the same item, from either file).
+
+version: 1
+rules:
+  # System temp files the OS itself considers expired — safe to reclaim
+  # without a per-item prompt, but still quarantined first (never an
+  # instant delete).
+  - id: official.system.expired-temp-files
+    description: "System temp files (/private/var/folders) not modified in 30+ days"
+    classification: safe-auto
+    match:
+      pathGlob: "/private/var/folders/**"
+      minimumAgeDays: 30
+    introducedInVersion: 1
+
+  # Xcode DerivedData is trivially regenerable by the next build — still
+  # requires confirmation by default (it can be large and some people rely
+  # on incremental build state), but explicitly called out here rather than
+  # left to the silent default so its rationale is documented.
+  - id: official.xcode.derived-data-stale
+    description: "Xcode DerivedData not touched in 60+ days — safe to remove, Xcode regenerates it"
+    classification: needs-confirmation
+    match:
+      pathGlob: "**/Xcode/DerivedData/**"
+      minimumAgeDays: 60
+    introducedInVersion: 1
+
+  # ----------------------------------------------------------------------
+  # TODO: add machine-specific paths here.
+  #
+  # This block is intentionally left for you (the app's maintainer) to add
+  # rules specific to your own Mac's setup — the app's maintainers won't
+  # guess at your personal project locations, scratch directories, or
+  # workflows. Add entries below following the same shape as the examples
+  # above. Remember: classification can only be `safe-auto` or
+  # `needs-confirmation` here, never `forbidden`.
+  # ----------------------------------------------------------------------
