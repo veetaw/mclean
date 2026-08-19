@@ -3,13 +3,13 @@
 ## Automated coverage
 
 Every package under `Packages/` has its own `swift test` suite. As of this
-writing, **246 tests pass across 11 packages**, verified independently
+writing, **345 tests pass across 15 packages**, verified independently
 (not just trusted from whatever built them) with a clean `.build` for each:
 
 | Package | Tests |
 |---|---|
 | CoreScanEngine | 1 |
-| SafetyRules | 14 |
+| SafetyRules | 42 |
 | PrivilegedHelperXPC | 1 |
 | VirusTotalClient | 1 |
 | DevToolsDetectors | 44 |
@@ -19,6 +19,10 @@ writing, **246 tests pass across 11 packages**, verified independently
 | UIDesignSystem | 7 |
 | RemoteControlServer | 27 |
 | MainAppUI | 14 |
+| TrashCleaner | 20 |
+| LargeOldFilesFinder | 16 |
+| DuplicateFinder | 19 |
+| Shredder | 16 |
 
 Run all of them:
 
@@ -34,14 +38,39 @@ Per the product spec, this is the module that most needs high confidence:
   ordinary user paths are confirmed *not* matched (a false positive here
   would make the app refuse to clean anything; a false negative would be
   far worse).
-- `SafetyClassifierTests` — forbidden paths classify as `.forbidden`;
-  everything else defaults to `.needsConfirmation` (the safe default, since
-  `safe-auto` rule matching isn't wired in yet — see checkpoint 4).
+- `SafetyClassifierTests` / `SafetyClassifierRuleMatchingTests` — forbidden
+  paths classify as `.forbidden`; everything else defaults to
+  `.needsConfirmation` unless an official/user rule matches; the
+  conservative merge (needs-confirmation always beats safe-auto for the
+  same item, regardless of source) is directly tested, including the case
+  of a user rule attempting to loosen an official needs-confirmation
+  decision.
+- `DenylistCheckpoint4Tests` — credential directories, `.env`/`.pem`/`.key`
+  patterns, the dirty-git-repo check (against a real git repository
+  fixture, not simulated), and the non-boot-volume safe-auto downgrade.
+- `RuleFileLoaderTests` — the real bundled `official_rules.yaml` loads with
+  a matching hash; a hash mismatch downgrades every official safe-auto
+  rule and sets a warning; a missing/malformed rule file degrades to "no
+  rules from that source" rather than crashing; `user_rules.yaml` is
+  created with example comments on first load.
 - `FileSystemQuarantineManagerTests` — quarantine/restore round-trip,
   refusal to quarantine a forbidden path, refusal to restore over an
   occupied destination, retention-based purge (only expired items are
   purged), and manifest persistence across separate manager instances
   (i.e. across app restarts).
+
+### Safety-critical coverage (Shredder)
+
+The one deliberate exception to the quarantine flow — see
+`ARCHITECTURE.md`'s "Shredder: the quarantine exception" section. Its own
+`ShredderTests` cover: the two-step API can't be bypassed (`ShredRequest`
+has no accessible public initializer); denylist rejection at both
+`requestShred` and `confirmShred` time, including a path that became
+forbidden *after* the request was created and a symlink swapped in after
+the request (closing the TOCTOU window with `O_NOFOLLOW`); pass content is
+directly verified (pass 2 is genuinely all-`0xFF`, not just "assumed to
+have happened"); cancellation never leaves a partially truncated or
+partially deleted file.
 
 ### Repo-wide destructive-action audit
 
@@ -56,13 +85,24 @@ Ran manually as part of Phase 3, re-run any time before a release:
 #  - PowerUserInspectors/ConfigFileExplorer.swift: removing a *stale
 #    same-named backup file* immediately before writing a fresh one, not
 #    user data
+#  - Shredder/Shredder.swift: confirmShred's final removeItem, only after
+#    every overwrite pass has completed and been fsync'd — this is
+#    Shredder's own documented, deliberate exception to quarantine, not a
+#    new unaudited path (see ARCHITECTURE.md's "Shredder" section)
 grep -rn "\.removeItem(" Packages --include="*.swift" | grep -v "/Tests/"
 
 # No detector/inspector should ever invoke a mutating subcommand.
 grep -rn '"prune"\|"rmi"\|"uninstall"' Packages --include="*.swift" | grep -v "/Tests/"
+
+# Shredder.swift should be the only file in the whole repo opening a file
+# for writing with a raw POSIX open() call. --exclude-dir=.build matters
+# here: XCTest's own generated test-discovery runner.swift files use
+# O_WRONLY internally for lock-file coordination and will otherwise show
+# up as false positives (they're gitignored build output, not source).
+grep -rln --exclude-dir=.build "open(.*O_WRONLY" Packages --include="*.swift" | grep -v "/Tests/"
 ```
 
-Both should come back empty except the three call sites listed above.
+All three should come back matching only the call sites named above.
 
 ## Manual test checklist
 
@@ -118,11 +158,46 @@ permission flows.
 ### App Store vs. Developer ID build behavior
 
 - [ ] Build and run `MCleanPro-AppStore`; confirm the sandbox-limitation
-      banner is visible, the Remote Control section is entirely absent
-      (not just disabled) from the sidebar, and no privileged-helper /
-      broad-filesystem-scan code path is reachable.
+      banner is visible, the Remote Control **and Shredder** sections are
+      entirely absent (not just disabled) from the sidebar, and no
+      privileged-helper / broad-filesystem-scan code path is reachable.
 - [ ] Build and run `MCleanPro-DeveloperID`; confirm the banner is absent
-      and Remote Control is available.
+      and both Remote Control and Shredder are available.
+
+### Shredder (destructive, irreversible — test with throwaway files only)
+
+- [ ] From the Shredder tab, pick a real (disposable, non-important) test
+      file; confirm the first confirmation sheet shows its correct path
+      and size before anything happens on disk.
+- [ ] Confirm the first sheet, then confirm the second (graver) sheet;
+      watch the pass-progress indicator; confirm the file is gone from
+      Finder afterward and does **not** appear anywhere in the Quarantine
+      tab (it deliberately bypasses quarantine).
+- [ ] Cancel at the first sheet; confirm the file is completely untouched
+      (unchanged size/mtime/content).
+- [ ] Attempt to shred a file matching a hardcoded denylist pattern (e.g. a
+      throwaway `.pem` file, or something under `~/.ssh`); confirm
+      `requestShred` refuses it before the first confirmation sheet even
+      appears.
+- [ ] Attempt to shred a file inside a git repository with uncommitted
+      changes; confirm it's refused with a message naming the dirty repo.
+- [ ] Confirm the on-screen honesty text about SSD/APFS limits is visible
+      and is never phrased as a guarantee ("makes recovery significantly
+      harder," not "guarantees unrecoverable").
+
+### System Junk (Trash / Large & Old Files / Duplicates)
+
+- [ ] Put a real (disposable) item in the Finder Trash; rescan; confirm it
+      appears in the System Junk findings list with the correct size.
+- [ ] Create two byte-identical throwaway files somewhere scanned by
+      default (e.g. `~/Downloads`); rescan; confirm both are grouped as an
+      exact duplicate, with the kept "original" correctly identified.
+- [ ] Create two near-identical images (e.g. the same photo saved twice at
+      different JPEG quality) and two clearly different images; rescan;
+      confirm only the near-identical pair is grouped as similar.
+- [ ] Confirm nothing from Developer Tools/Mobile Dev/Power User's own
+      territory (e.g. `node_modules`, `~/.gradle`) shows up duplicated in
+      System Junk's results.
 
 ### Quarantine lifecycle (can be scripted, but worth a manual pass too)
 

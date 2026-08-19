@@ -6,15 +6,19 @@ artifacts left behind by common dev toolchains (Python, Node, Rust, Go,
 Ruby, Java/Gradle, Docker, Xcode, Android, ...) and helps you reclaim disk
 space safely.
 
-> **Status:** all planned modules are implemented and tested (246 tests
-> passing across 11 packages), and both app targets (`MCleanPro-AppStore`,
-> `MCleanPro-DeveloperID`) build successfully via `xcodegen`. What's *not*
-> built yet: the core "System Junk" cleaners (§5.1 of the product spec —
-> trash bins, large/old files, duplicates), a concrete `VirusTotalClient`
+> **Status:** all planned modules are implemented and tested (345 tests
+> passing across 15 packages), and both app targets (`MCleanPro-AppStore`,
+> `MCleanPro-DeveloperID`) build successfully via `xcodegen`. Includes
+> Trash Bins, Large & Old Files, Duplicate/Similar Files, and a secure
+> Shredder (the one deliberate exception to the reversible-quarantine
+> flow — see `ARCHITECTURE.md`). What's *not* built yet: system/user cache
+> cleanup, an app Uninstaller, Optimization (login items), a Privacy
+> cleaner, maintenance scripts, Space Lens, a concrete `VirusTotalClient`
 > network implementation, the `PrivilegedHelper` executable itself, and
 > real code-signing/notarization. See `ARCHITECTURE.md`'s status table for
 > the module-by-module detail and `TESTING.md` for the manual checklist
-> items that can't be automated (pairing flow, permission onboarding).
+> items that can't be automated (pairing flow, permission onboarding,
+> Shredder, System Junk).
 
 ## Non-negotiable safety principles
 
@@ -62,9 +66,9 @@ regenerate it any time with `xcodegen generate`, don't hand-edit it.
 
 ## Testing
 
-See `TESTING.md` for the full picture: what's covered by the 246 automated
+See `TESTING.md` for the full picture: what's covered by the 345 automated
 tests, and the manual checklist for the parts that aren't (remote pairing,
-permission onboarding).
+permission onboarding, Shredder, System Junk).
 
 ## License
 
