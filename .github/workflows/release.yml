@@ -1,0 +1,192 @@
+# =============================================================================
+# Release workflow — currently DORMANT.
+#
+# This repo is local-only right now (no GitHub remote configured), so this
+# workflow has never actually run and cannot run until that changes. The
+# `push: tags: ['v*']` trigger below is a normal, honest tag-push trigger —
+# it is "dormant" purely because there is no remote for GitHub to run it
+# on yet, not because of any special guard baked into the trigger itself.
+#
+# Before this can run for real:
+#   1. Push this repository to a GitHub remote.
+#   2. Push a `vX.Y.Z`-shaped tag to that remote.
+#   3. (Only needed for the signing/notarization section — see the big
+#      comment block further down.) Configure the code-signing secrets
+#      referenced below in this repo's GitHub Settings > Secrets and
+#      variables > Actions.
+#
+# Scope — DeveloperID only:
+#   Like Scripts/release.sh (Track A) and ci.yml, this workflow only
+#   packages `MCleanPro-DeveloperID`. `MCleanPro-AppStore` is deliberately
+#   paused from the active pipeline and is not built or packaged here.
+#
+# What this workflow does NOT do, on purpose:
+#   - It never auto-creates a GitHub Release.
+#   - It never auto-uploads the built artifact anywhere (no distribution
+#     channel, no external host, nothing that leaves the runner).
+#   - The only output is a workflow-run artifact you'd manually download
+#     and inspect. A future maintainer could add a manual-approval-gated
+#     publish step after the fact, but no such step exists here.
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-release:
+    name: Build release package (MCleanPro-DeveloperID)
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release.sh may want full history for changelog generation
+
+      - name: Select Xcode
+        run: |
+          # See ci.yml's top-of-file comment for the full explanation: this
+          # picks the runner image's default Xcode. Pin explicitly once a
+          # macOS-26-SDK-capable Xcode is available on hosted runners.
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      # -----------------------------------------------------------------
+      # Version bump / changelog / build / package — delegated entirely to
+      # Scripts/release.sh (Track A), the same script a maintainer would
+      # run locally. Running it here (rather than reimplementing its logic
+      # in YAML) is what keeps local releases and CI releases identical.
+      #
+      # As written, Scripts/release.sh produces an UNSIGNED, "local build
+      # only"-labeled .dmg — it does not sign or notarize anything itself.
+      # That's exactly what this job also ends up producing today, since
+      # the signing/notarization section below is non-functional. See
+      # Scripts/release.sh once Track A lands for its exact CLI surface
+      # (version arg, changelog behavior, output path).
+      # -----------------------------------------------------------------
+      - name: Run release script (version bump, changelog, build, package)
+        run: ./Scripts/release.sh
+
+      # ===================================================================
+      # CODE SIGNING & NOTARIZATION — NOT FUNCTIONAL TODAY.
+      #
+      # Everything in this section is scaffolding for a future release
+      # process. If this workflow were somehow triggered right now (it
+      # can't be — see the top of this file), this section would fail or
+      # no-op harmlessly, and the job would still produce the same
+      # unsigned, "local build only"-labeled .dmg that Scripts/release.sh
+      # already built above — it will NOT silently claim a signed,
+      # notarized release happened.
+      #
+      # What is missing before this section can produce a real
+      # distributable, signed, notarized build:
+      #
+      #   1. A PAID Apple Developer Program membership, and a
+      #      "Developer ID Application" signing certificate issued under
+      #      it. Neither exists for this project yet.
+      #
+      #   2. That certificate exported from Keychain Access as a `.p12`
+      #      file, base64-encoded, and stored as the
+      #      DEVELOPER_ID_CERTIFICATE_P12_BASE64 GitHub secret (with its
+      #      export password stored as
+      #      DEVELOPER_ID_CERTIFICATE_PASSWORD). Not done yet.
+      #
+      #   3. An app-specific password (or App Store Connect API key) for
+      #      `notarytool`, generated from the Apple ID that will submit
+      #      builds for notarization, stored as
+      #      NOTARIZATION_APP_SPECIFIC_PASSWORD (alongside the Apple ID
+      #      itself as NOTARIZATION_APPLE_ID and the team as
+      #      APPLE_TEAM_ID). Not done yet.
+      #
+      #   4. This repository actually pushed to a GitHub remote, with all
+      #      of the above configured as Actions secrets in that repo's
+      #      Settings > Secrets and variables > Actions. Not done yet —
+      #      there is no remote at all right now.
+      #
+      # None of this exists today. The `${{ secrets.* }}` references below
+      # are ONLY the GitHub Actions secret-reference syntax — they contain
+      # no real credential material, and if this job runs before the above
+      # is set up, every secret resolves to an empty string, the
+      # `codesign`/`xcrun notarytool` commands fail immediately, and the
+      # `continue-on-error: true` guards make sure that failure doesn't
+      # block the (already-unsigned) artifact produced above from being
+      # uploaded as a workflow-run artifact.
+      # ===================================================================
+
+      - name: "[NON-FUNCTIONAL] Import Developer ID signing certificate"
+        if: false # disabled: no certificate/secrets exist yet — see block comment above
+        continue-on-error: true
+        env:
+          DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "Would decode DEVELOPER_ID_CERTIFICATE_P12_BASE64, import it into a"
+          echo "temporary keychain using DEVELOPER_ID_CERTIFICATE_PASSWORD, and"
+          echo "select the Developer ID Application identity for team APPLE_TEAM_ID."
+          echo "Not implemented: no real certificate exists for this project yet."
+          exit 1
+
+      - name: "[NON-FUNCTIONAL] Code sign MCleanPro-DeveloperID.app"
+        if: false # disabled: depends on the certificate-import step above
+        continue-on-error: true
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "Would run: codesign --deep --force --options runtime \\"
+          echo "  --sign \"Developer ID Application: <team APPLE_TEAM_ID>\" \\"
+          echo "  <path to MCleanPro-DeveloperID.app>"
+          echo "Not implemented: no signing identity is available (see previous step)."
+          exit 1
+
+      - name: "[NON-FUNCTIONAL] Notarize and staple"
+        if: false # disabled: no Apple credentials configured yet — see block comment above
+        continue-on-error: true
+        env:
+          NOTARIZATION_APPLE_ID: ${{ secrets.NOTARIZATION_APPLE_ID }}
+          NOTARIZATION_APP_SPECIFIC_PASSWORD: ${{ secrets.NOTARIZATION_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          echo "Would run: xcrun notarytool submit <path to .dmg> \\"
+          echo "  --apple-id \"\$NOTARIZATION_APPLE_ID\" \\"
+          echo "  --password \"\$NOTARIZATION_APP_SPECIFIC_PASSWORD\" \\"
+          echo "  --team-id \"\$APPLE_TEAM_ID\" --wait"
+          echo "followed by: xcrun stapler staple <path to .dmg>"
+          echo "Not implemented: no Apple Developer Program membership/credentials exist yet."
+          exit 1
+
+      # ===================================================================
+      # End of non-functional signing/notarization scaffolding.
+      # ===================================================================
+
+      # -----------------------------------------------------------------
+      # Happy path today: whatever Scripts/release.sh produced above — an
+      # unsigned, "local build only"-labeled .dmg — uploaded as a
+      # workflow-run artifact for manual download/inspection. This is
+      # NOT a publish step: it does not create a GitHub Release, and it
+      # does not push the file anywhere outside this Actions run.
+      # -----------------------------------------------------------------
+      - name: Upload unsigned build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCleanPro-DeveloperID-unsigned
+          # Scripts/release.sh is expected to place its output under
+          # dist/ (or similar) — adjust this path once that script lands
+          # and its actual output location is known.
+          path: dist/*.dmg
+          if-no-files-found: warn
+          retention-days: 14
+
+      # NOTE for a future maintainer: this is where a manual-approval-gated
+      # publish step (e.g. `environment: { name: production }` requiring a
+      # reviewer, followed by an actual GitHub Release upload) could go
+      # once signing/notarization above is real. No such step is
+      # implemented here — see the "What this workflow does NOT do" note
+      # at the top of this file.

@@ -1,0 +1,84 @@
+# =============================================================================
+# CI workflow — currently DORMANT.
+#
+# This repo is local-only right now (no GitHub remote configured), so this
+# workflow has never actually run and cannot run until that changes. It is
+# checked in ahead of time so the pipeline is ready the moment a remote
+# exists — there is nothing broken or half-finished about the trigger
+# config below, it just has nowhere to fire yet.
+#
+# Before this can run for real:
+#   1. Push this repository to a GitHub remote (e.g. `git remote add origin
+#      <url> && git push -u origin main`).
+#   2. That's it for CI specifically — unlike release.yml, this workflow
+#      needs no secrets, since it only builds/tests locally-signable
+#      configurations (see below).
+#
+# Scope — DeveloperID only:
+#   This workflow intentionally builds and tests only the
+#   `MCleanPro-DeveloperID` app target, via `Scripts/ci.sh`, mirroring the
+#   local Track A scripts. `MCleanPro-AppStore` has been deliberately
+#   paused from the active build/test pipeline (to save CI/dev time) — its
+#   code remains in the repo untouched, it is simply not exercised by this
+#   workflow right now. Re-enabling it here is just a matter of adding an
+#   equivalent `xcodebuild ... -scheme MCleanPro-AppStore` step (or a flag
+#   to `Scripts/ci.sh`) once that pause is lifted.
+#
+# Xcode version:
+#   Pinned below to `latest-stable`, which on GitHub's hosted macOS runners
+#   resolves to whatever Xcode that runner image publishes as its default
+#   stable release at the time the job runs — NOT necessarily the exact
+#   version used for local development. This repo's toolchain requirement
+#   (see CONTRIBUTING.md) is Xcode with a Swift 6 toolchain targeting
+#   macOS 26 (Tahoe) or later, i.e. an Xcode version that ships the macOS 26
+#   SDK. As of when this workflow was written, GitHub-hosted macOS runners
+#   do not yet ship an Xcode version with macOS 26 SDK support — when that
+#   lands, this workflow will need `xcode-select` pointed at a specific
+#   Xcode version (e.g. via `maxim-lobanov/setup-xcode@v1` with an explicit
+#   `xcode-version:`) rather than relying on the runner's default, so builds
+#   don't silently drift as new runner images roll out. Revisit this the
+#   next time this file is touched.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build-and-test:
+    name: Build & Test (MCleanPro-DeveloperID)
+    # A specific recent macOS runner image (rather than a floating
+    # `macos-latest`) so the toolchain available to this job doesn't shift
+    # underneath it when GitHub rolls `macos-latest` to a new image.
+    # Bump this deliberately, in step with the Xcode-version note above.
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          # See the top-of-file comment: this selects whatever this runner
+          # image's default "stable" Xcode is. Replace with an explicit
+          # `sudo xcode-select -s /Applications/Xcode_<version>.app` (or the
+          # maxim-lobanov/setup-xcode action) once a macOS-26-SDK-capable
+          # Xcode is available on hosted runners.
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Run CI script (build + test, MCleanPro-DeveloperID only)
+        # Scripts/ci.sh is the single source of truth for what "CI" means
+        # for this project (xcodegen generate, package builds/tests,
+        # xcodebuild for MCleanPro-DeveloperID). It is intentionally not
+        # reimplemented here so local runs (`./Scripts/ci.sh`) and CI runs
+        # stay identical. Owned by Track A — see that script for exact
+        # steps once it lands.
+        run: ./Scripts/ci.sh
