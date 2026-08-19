@@ -30,6 +30,12 @@ public enum DetectorCategory: String, Sendable, Codable, CaseIterable {
     case duplicates
     case uninstaller
     case privacy
+    /// Login items / launch agents review, startup-impact reporting
+    /// (`Optimization` package) — added when that package's implementer
+    /// flagged that `.uninstaller`/`.privacy` already had dedicated cases
+    /// despite being unimplemented at the time, while this category had
+    /// none; `.systemJunk` was being used as an imprecise stand-in.
+    case optimization
     case devTools
     case mobileDev
     case powerUser
