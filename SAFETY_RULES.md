@@ -1,9 +1,14 @@
 # Safety rules
 
-> ⚠️ **This document is a draft pending user review** (see checkpoint 4 in
-> the product spec). Nothing described here is wired into any deletion path
-> yet. Once reviewed and confirmed, this file becomes the authoritative
-> description of the on-disk rule format and the hardcoded denylist.
+> ⚠️ **The rule-file format section below is a draft pending your review**
+> (checkpoint 4 — still open). Everything *else* on this page — the
+> three-tier classification, the hardcoded denylist, and the quarantine
+> mechanism — is implemented and tested (`Packages/SafetyRules`, 14 tests)
+> and already wired into the app (`MainAppUI`'s `QuarantineConfirmationSheet`
+> is the only UI path to `FileSystemQuarantineManager`). Only the
+> user-editable `safe-auto` rule file itself remains unimplemented: until
+> its format is confirmed, `SafetyClassifier` defaults every non-forbidden
+> item to `needsConfirmation` — the safe fallback.
 
 ## Three-tier classification
 
