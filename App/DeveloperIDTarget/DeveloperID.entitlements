@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Deliberately NO com.apple.security.app-sandbox key: this target is
+	     the full-featured, non-sandboxed Developer ID build (distributed
+	     outside the Mac App Store, notarized instead — see
+	     ARCHITECTURE.md). App Sandbox entitlement keys below are meaningful
+	     the day this app opts into the sandbox; while it doesn't, they're
+	     harmless documentation of intent, not enforced restrictions. Kept
+	     for parity with the AppStore target's entitlements file and ready
+	     for `Scripts/` notarization tooling (out of scope here — see
+	     PROMPT MASTER) to pick up. -->
+
+	<!-- RemoteControlServer's LAN HTTP listener (Capabilities
+	     .canRunRemoteControlServer == true in this flavor). -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+
+	<!-- Outbound: RemoteControlServer's own client-side calls (none today)
+	     plus VirusTotalClient's hash-check lookups. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>

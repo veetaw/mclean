@@ -1,0 +1,147 @@
+name: MCleanPro
+options:
+  bundleIdPrefix: com.mcleanpro
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  # Local dev convenience only (see the per-target settings below for the
+  # actual codesign-skip flags) — NOT a notarization/distribution setup.
+  # That's explicitly Scripts/ + a later phase, out of scope for this
+  # generated project. See ARCHITECTURE.md.
+  developmentLanguage: en
+
+configs:
+  Debug: debug
+  Release: release
+
+# Every local Swift package this app assembles. MainAppUI (Packages/MainAppUI)
+# is the Phase 2 "Agent:MainAppUI" composition/SwiftUI package — it already
+# depends on every other package here, so in principle only it needs to be
+# listed as a target dependency, but every package is still declared here
+# (and most are also listed as explicit target dependencies below) so
+# Xcode's own dependency graph/indexing stays accurate rather than hiding
+# everything behind one umbrella product.
+packages:
+  CoreScanEngine:
+    path: ../Packages/CoreScanEngine
+  SafetyRules:
+    path: ../Packages/SafetyRules
+  DevToolsDetectors:
+    path: ../Packages/DevToolsDetectors
+  MobileDevDetectors:
+    path: ../Packages/MobileDevDetectors
+  PowerUserInspectors:
+    path: ../Packages/PowerUserInspectors
+  MenuBarAgent:
+    path: ../Packages/MenuBarAgent
+  RemoteControlServer:
+    path: ../Packages/RemoteControlServer
+  VirusTotalClient:
+    path: ../Packages/VirusTotalClient
+  PrivilegedHelperXPC:
+    path: ../Packages/PrivilegedHelperXPC
+  UIDesignSystem:
+    path: ../Packages/UIDesignSystem
+  MainAppUI:
+    path: ../Packages/MainAppUI
+
+# Settings shared by both app targets, layered under each target's own
+# `settings.base` below. Real macOS-26-only requirement (per the product
+# spec) encoded via MACOSX_DEPLOYMENT_TARGET / LSMinimumSystemVersion —
+# the SPM packages themselves keep `platforms: [.macOS(.v15)]` as a
+# conservative build-tooling floor (see each Package.swift's comment); the
+# actual shipping app targets pin the real minimum here.
+targetTemplates:
+  MCleanProAppTemplate:
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    settings:
+      base:
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+        # --- Local dev convenience: skip codesigning entirely so
+        # `xcodebuild build` succeeds without a real Apple Developer Team
+        # ID. NOT a notarization/distribution configuration. ---
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGNING_ALLOWED: NO
+        DEVELOPMENT_TEAM: ""
+
+targets:
+  MCleanPro-AppStore:
+    templates: [MCleanProAppTemplate]
+    sources:
+      - path: AppStoreTarget
+        excludes:
+          - "Info.plist"
+          - "AppStore.entitlements"
+    settings:
+      base:
+        # Distinct from the Developer ID target's PRODUCT_NAME so the two
+        # .app bundles never collide at the same output path when both are
+        # built locally (both still display as "MClean Pro" to the user —
+        # see CFBundleName/CFBundleDisplayName in Info.plist, which are
+        # literal, not derived from PRODUCT_NAME).
+        PRODUCT_NAME: "MClean Pro (App Store)"
+        PRODUCT_BUNDLE_IDENTIFIER: com.mcleanpro.app.appstore
+        INFOPLIST_FILE: AppStoreTarget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AppStoreTarget/AppStore.entitlements
+        # App Store submission requires the sandbox entitlement, which in
+        # turn requires hardened runtime's sibling protections to be sane;
+        # ENABLE_HARDENED_RUNTIME is harmless/ignored for an unsigned local
+        # build and correct for the day this target is actually archived.
+        ENABLE_HARDENED_RUNTIME: YES
+        # The single call site every other file in Packages/MainAppUI
+        # reads via BuildFlavor.current — see Capabilities.swift.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APPSTORE"
+    dependencies:
+      - package: CoreScanEngine
+      - package: SafetyRules
+      - package: DevToolsDetectors
+      - package: MobileDevDetectors
+      - package: PowerUserInspectors
+      - package: MenuBarAgent
+      - package: RemoteControlServer
+      - package: VirusTotalClient
+      - package: PrivilegedHelperXPC
+      - package: UIDesignSystem
+      - package: MainAppUI
+
+  MCleanPro-DeveloperID:
+    templates: [MCleanProAppTemplate]
+    sources:
+      - path: DeveloperIDTarget
+        excludes:
+          - "Info.plist"
+          - "DeveloperID.entitlements"
+    settings:
+      base:
+        PRODUCT_NAME: "MClean Pro"
+        PRODUCT_BUNDLE_IDENTIFIER: com.mcleanpro.app
+        INFOPLIST_FILE: DeveloperIDTarget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: DeveloperIDTarget/DeveloperID.entitlements
+        # Not sandboxed (no com.apple.security.app-sandbox entitlement —
+        # see DeveloperID.entitlements), hardened runtime enabled ahead of
+        # a future real notarization pass per ARCHITECTURE.md.
+        ENABLE_HARDENED_RUNTIME: YES
+        # No SWIFT_ACTIVE_COMPILATION_CONDITIONS override here: BuildFlavor
+        # .current resolves to .developerID whenever APPSTORE isn't set.
+    dependencies:
+      - package: CoreScanEngine
+      - package: SafetyRules
+      - package: DevToolsDetectors
+      - package: MobileDevDetectors
+      - package: PowerUserInspectors
+      - package: MenuBarAgent
+      - package: RemoteControlServer
+      - package: VirusTotalClient
+      - package: PrivilegedHelperXPC
+      - package: UIDesignSystem
+      - package: MainAppUI

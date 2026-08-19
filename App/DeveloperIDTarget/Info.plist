@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>MClean Pro</string>
+	<key>CFBundleDisplayName</key>
+	<string>MClean Pro</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>26.0</string>
+	<key>LSApplicationSecondaryCategoryType</key>
+	<string>public.app-category.developer-tools</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 MClean Pro. See LICENSE.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>LSApplicationIsAgent</key>
+	<false/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticTermination</key>
+	<true/>
+	<key>NSSupportsSuddenTermination</key>
+	<true/>
+	<!--
+	  RemoteControlServer's Bonjour advertisement (see
+	  Packages/RemoteControlServer/Sources/RemoteControlServer/Bonjour/BonjourAdvertiser.swift,
+	  RemoteControlServer.bonjourServiceType) and the Local Network
+	  permission prompt it triggers. Developer ID only —
+	  Capabilities.canRunRemoteControlServer is false in the App Store
+	  flavor, so that Info.plist deliberately omits both of these keys.
+	-->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MClean Pro uses your local network to let a paired phone or tablet on the same Wi-Fi view scan findings and approve cleanup, only while you have Remote Control turned on in Settings.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mcleanpro._tcp</string>
+	</array>
+</dict>
+</plist>
