@@ -7,17 +7,18 @@ import VirusTotalClient
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var retentionDays = 7
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.large) {
-                Label("Settings", systemImage: "gearshape")
-                    .font(DSTypography.largeTitle)
+                ModuleHeroHeader(title: "Settings", systemImage: "gearshape", tint: DSColor.textSecondary)
 
                 if let warning = environment.safetyRulesIntegrityWarning {
                     safetyRulesWarningCard(warning)
                 }
                 buildInfoCard
+                appearanceCard
                 quarantineCard
                 permissionsCard
                 virusTotalCard
@@ -54,6 +55,26 @@ struct SettingsView: View {
                 LabeledContent("Privileged helper", value: environment.capabilities.canInstallPrivilegedHelper ? "Available" : "Not available (sandboxed)")
                 LabeledContent("Remote Control server", value: environment.capabilities.canRunRemoteControlServer ? "Available" : "Not available (sandboxed)")
                 LabeledContent("Full-disk / other-user scanning", value: environment.capabilities.canAccessOtherUsersFiles ? "Available" : "User-selected files only")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var appearanceCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: DSSpacing.small) {
+                Text("Appearance").font(DSTypography.heading)
+                Text("Choose whether MClean Pro uses a light or dark look, or follows the system setting.")
+                    .font(DSTypography.subheading)
+                    .foregroundStyle(DSColor.textSecondary)
+                Picker("Appearance", selection: $appearanceMode) {
+                    ForEach(AppearanceMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 320)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

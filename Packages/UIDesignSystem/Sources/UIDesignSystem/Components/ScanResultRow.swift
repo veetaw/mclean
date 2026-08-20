@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -6,10 +7,15 @@ import SwiftUI
 ///
 /// Deliberately takes plain values (not a `CoreScanEngine.ScanItem`) —
 /// `UIDesignSystem` has no dependency on feature packages. Callers map their
-/// own model into these parameters at the call site.
+/// own model into these parameters at the call site, including deciding
+/// whether an item warrants a real `icon` (e.g. resolving `.app` bundle
+/// semantics is the caller's job, not this view's — see
+/// `MainAppUI.ScanItemRowDisplay`). This view only renders whatever it's
+/// given; it never resolves or caches an icon/name itself.
 @available(macOS 26.0, *)
 public struct ScanResultRow: View {
     private let systemImage: String
+    private let icon: NSImage?
     private let title: String
     private let subtitle: String
     private let sizeBytes: Int64?
@@ -20,6 +26,7 @@ public struct ScanResultRow: View {
 
     public init(
         systemImage: String,
+        icon: NSImage? = nil,
         title: String,
         subtitle: String,
         sizeBytes: Int64?,
@@ -29,6 +36,7 @@ public struct ScanResultRow: View {
         action: @escaping () -> Void
     ) {
         self.systemImage = systemImage
+        self.icon = icon
         self.title = title
         self.subtitle = subtitle
         self.sizeBytes = sizeBytes
@@ -40,10 +48,22 @@ public struct ScanResultRow: View {
 
     public var body: some View {
         HStack(spacing: DSSpacing.medium) {
-            Image(systemName: systemImage)
-                .font(.title3)
-                .foregroundStyle(DSColor.textSecondary)
-                .frame(width: 28, height: 28)
+            // `icon` (e.g. a real app icon from `NSWorkspace`) takes priority
+            // over the SF Symbol fallback when the caller has one — callers
+            // are expected to have already cached it, so reading it here on
+            // every `body` evaluation is just a dictionary-cached property
+            // access, not fresh disk I/O.
+            if let icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                    .foregroundStyle(DSColor.textSecondary)
+                    .frame(width: 28, height: 28)
+            }
 
             VStack(alignment: .leading, spacing: DSSpacing.xxSmall) {
                 Text(title)

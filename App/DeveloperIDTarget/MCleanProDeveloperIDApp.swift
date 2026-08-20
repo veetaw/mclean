@@ -14,6 +14,11 @@ import SwiftUI
 @main
 struct MCleanProDeveloperIDApp: App {
     @State private var environment: AppEnvironment?
+    // Mirrors SettingsView's own `@AppStorage("appearanceMode")` — same key,
+    // so a change made in Settings is observed here immediately and applied
+    // app-wide via `.preferredColorScheme` below, without routing the value
+    // through ContentView or AppEnvironment.
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
 
     var body: some Scene {
         WindowGroup {
@@ -35,6 +40,7 @@ struct MCleanProDeveloperIDApp: App {
             // plus a usable detail pane (FindingsListView rows, SpaceLensView's
             // treemap) from being squeezed below a readable width/height.
             .frame(minWidth: 900, minHeight: 600)
+            .preferredColorScheme(appearanceMode.colorScheme)
         }
         .defaultSize(width: 1120, height: 760)
         .windowResizability(.contentSize)

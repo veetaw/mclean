@@ -39,6 +39,25 @@ public enum DetectorCategory: String, Sendable, Codable, CaseIterable {
     case devTools
     case mobileDev
     case powerUser
+
+    /// Human-readable label for UI surfaces that group/report by category
+    /// directly (e.g. per-module scan progress) — kept here so every
+    /// consumer shows the same wording instead of each view re-deriving its
+    /// own mapping.
+    public var displayName: String {
+        switch self {
+        case .systemJunk: "System Junk"
+        case .trash: "Trash"
+        case .largeAndOldFiles: "Large & Old Files"
+        case .duplicates: "Duplicates"
+        case .uninstaller: "Uninstaller"
+        case .privacy: "Privacy"
+        case .optimization: "Optimization"
+        case .devTools: "Developer Tools"
+        case .mobileDev: "Mobile Dev"
+        case .powerUser: "Power User"
+        }
+    }
 }
 
 /// Shared, read-only execution context passed to every detector.

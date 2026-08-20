@@ -34,12 +34,20 @@ struct QuarantineConfirmationSheet: View {
             }
 
             GlassCard {
+                // `LazyVStack` — see the identical note on
+                // `FindingsListView.resultsList`. A "Clean Safe Items" batch
+                // can be every `safeAuto` finding from a full scan, so this
+                // list is exactly as susceptible to the eager-`VStack`
+                // virtualization trap as the main findings list is.
                 ScrollView {
-                    VStack(spacing: 0) {
+                    LazyVStack(spacing: 0) {
                         ForEach(findings) { finding in
                             VStack(alignment: .leading, spacing: DSSpacing.xxSmall) {
                                 HStack {
-                                    Text(finding.item.category)
+                                    // Same `.app`-bundle name resolution as
+                                    // `ScanResultRow` call sites — see
+                                    // `ScanItemRowDisplay`.
+                                    Text(ScanItemRowDisplay.title(for: finding.item))
                                         .font(DSTypography.heading)
                                     Spacer()
                                     SafetyBadge(finding.verdict.uiTier)

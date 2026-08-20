@@ -25,8 +25,11 @@ struct UninstallerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DSSpacing.large) {
-            Label("Uninstaller", systemImage: "minus.app")
-                .font(DSTypography.largeTitle)
+            ModuleHeroHeader(
+                title: "Uninstaller",
+                systemImage: "minus.app",
+                subtitle: "Pick an installed app to preview and remove every related file it left behind."
+            )
 
             if let selectedApp {
                 previewCard(for: selectedApp)
@@ -67,16 +70,34 @@ struct UninstallerView: View {
                     }
                     .padding(DSSpacing.medium)
                 } else if apps.isEmpty {
-                    Text("No apps found under /Applications or ~/Applications.")
-                        .font(DSTypography.subheading)
-                        .foregroundStyle(DSColor.textSecondary)
-                        .padding(DSSpacing.medium)
+                    VStack(spacing: DSSpacing.xSmall) {
+                        Image(systemName: "questionmark.app.dashed")
+                            .font(.title2)
+                            .foregroundStyle(DSColor.textTertiary)
+                        Text("No Apps Found")
+                            .font(DSTypography.heading)
+                        Text("Nothing was found under /Applications or ~/Applications.")
+                            .font(DSTypography.subheading)
+                            .foregroundStyle(DSColor.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(DSSpacing.large)
                 } else {
+                    // `LazyVStack`, not `VStack` — see the identical note on
+                    // `FindingsListView.resultsList`. The app list is
+                    // usually short, but this keeps the two lists in this
+                    // view (and every other findings-style list in the app)
+                    // consistently non-eager.
                     ScrollView {
-                        VStack(spacing: 0) {
+                        LazyVStack(spacing: 0) {
                             ForEach(apps) { app in
                                 ScanResultRow(
                                     systemImage: "app.dashed",
+                                    // `InstalledApp.name` is already a
+                                    // resolved display name (see
+                                    // `InstalledAppsInspector`), but it has
+                                    // no icon — resolve + cache one here.
+                                    icon: AppBundleDisplayCache.icon(forPath: app.path),
                                     title: app.name,
                                     subtitle: app.bundleIdentifier ?? app.path,
                                     sizeBytes: app.sizeBytes,
@@ -117,12 +138,14 @@ struct UninstallerView: View {
                 .foregroundStyle(DSColor.textSecondary)
 
             GlassCard(padding: 0) {
+                // `LazyVStack` — see the note on `FindingsListView.resultsList`.
                 ScrollView {
-                    VStack(spacing: 0) {
+                    LazyVStack(spacing: 0) {
                         ForEach(relatedFindings) { finding in
                             ScanResultRow(
                                 systemImage: rowIcon(for: finding),
-                                title: finding.item.category,
+                                icon: ScanItemRowDisplay.icon(for: finding.item),
+                                title: ScanItemRowDisplay.title(for: finding.item),
                                 subtitle: finding.item.path,
                                 sizeBytes: finding.item.sizeBytes,
                                 safetyTier: finding.verdict.uiTier,

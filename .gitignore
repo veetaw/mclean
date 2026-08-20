@@ -41,9 +41,17 @@ Scripts/secrets/
 # Scripts/release.sh output (local .dmg packages) — build artifacts, never commit
 dist/
 
-# Local runtime data (quarantine store, SQLite db, logs) — never commit user data
+# Local runtime data (quarantine store, SQLite db, logs) — never commit user data.
+# Runtime quarantine storage actually lives outside the repo entirely
+# (~/Library/Application Support/MCleanPro/Quarantine, see
+# FileSystemQuarantineManager.defaultQuarantineRoot); tests use a temp dir.
+# Anchored to repo root (leading `/`) so this can never accidentally match
+# source directories named "Quarantine" nested under Packages/ (it silently
+# did, unanchored, for Packages/MainAppUI/Sources/MainAppUI/Views/Quarantine/
+# and Packages/MenuBarAgent/Sources/MenuBarAgent/Quarantine/ — both were
+# untracked in git since 2ea547c and are added back in this same commit).
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-Quarantine/
-Logs/
+/Quarantine/
+/Logs/

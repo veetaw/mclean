@@ -32,8 +32,16 @@ struct ShredderView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.large) {
-                Label("Shredder", systemImage: "scissors")
-                    .font(DSTypography.largeTitle)
+                // Tinted `destructive`, not the default `accent` — Shredder
+                // is the one screen in the app whose primary action is
+                // always irreversible, so its hero should read as more
+                // serious than a routine module at a glance.
+                ModuleHeroHeader(
+                    title: "Shredder",
+                    systemImage: "scissors",
+                    subtitle: "Permanently overwrite and delete a single file. Bypasses Quarantine entirely — there is no undo.",
+                    tint: DSColor.destructive
+                )
 
                 honestyCard
                 pickerCard

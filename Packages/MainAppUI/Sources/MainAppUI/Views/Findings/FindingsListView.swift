@@ -24,8 +24,18 @@ struct FindingsListView: View {
     @Environment(AppEnvironment.self) private var environment
 
     @State private var findings: [ScanFinding] = []
-    @State private var isScanning = false
     @State private var lastScanFinishedAt: Date?
+    // `isScanning` is intentionally NOT local `@State` — it reads
+    // `environment.scanRunner.isScanning` directly (see `ScanRunner`'s doc
+    // comment). Local `@State` here is exactly what caused "scans stop when
+    // switching tabs": `ContentView.detailView(for:)` recreates this view
+    // (with fresh `@State`) on every sidebar navigation, so a locally-owned
+    // scanning flag silently reset to `false` even while the scan `Task`
+    // kept running unseen in the background. Reading it from `AppEnvironment`
+    // (constructed once, alive for the app's lifetime) means every section
+    // sees the same in-progress state regardless of which view started the
+    // scan or which view is currently visible.
+    private var isScanning: Bool { environment.scanRunner.isScanning }
     // Stores the `Identifiable` sheet item itself (created once, at the
     // moment the user taps an action), not just the raw `[ScanFinding]`
     // batch. Previously this was `[ScanFinding]?` and `.sheet(item:)` was
@@ -58,6 +68,17 @@ struct FindingsListView: View {
         }
         .padding(DSSpacing.xLarge)
         .task { await refresh() }
+        // A scan started from *this* view, another view, or the Dashboard
+        // all funnel through the same `environment.scanRunner` — when it
+        // flips back to not-scanning, re-pull the snapshot so this view's
+        // list reflects the just-finished results without requiring the
+        // user to navigate away and back (which would previously have been
+        // the only way to see anything change).
+        .onChange(of: environment.scanRunner.isScanning) { _, nowScanning in
+            if !nowScanning {
+                Task { await refresh() }
+            }
+        }
         .sheet(item: $pendingQuarantine) { batch in
             QuarantineConfirmationSheet(
                 findings: batch.findings,
@@ -77,10 +98,14 @@ struct FindingsListView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: DSSpacing.small) {
-            HStack {
-                Label(title, systemImage: systemImage)
-                    .font(DSTypography.largeTitle)
-                Spacer()
+            // `ModuleHeroHeader` gives this landing screen the same icon
+            // badge + large-title treatment as every other module (see the
+            // component's doc comment) — this replaces the previous bare
+            // `Label(...).font(.largeTitle)`, the row of controls is now the
+            // header's `accessory` instead of a hand-rolled `HStack`. Purely
+            // presentational: still the same `Rescan`/`Clean Safe Items`
+            // actions and the same `isScanning`/`safeAutoEligible` state.
+            ModuleHeroHeader(title: title, systemImage: systemImage) {
                 GlassControlGroup {
                     Button("Rescan", systemImage: "arrow.clockwise") {
                         Task { await scanNow() }
@@ -98,49 +123,63 @@ struct FindingsListView: View {
                 }
             }
 
-            HStack(spacing: DSSpacing.small) {
-                if isScanning {
-                    ProgressView().controlSize(.small)
-                    Text("Scanning…")
-                        .font(DSTypography.subheading)
-                        .foregroundStyle(DSColor.textSecondary)
-                } else if let lastScanFinishedAt {
-                    Text("Last scan: \(lastScanFinishedAt.formatted(date: .abbreviated, time: .shortened)) · \(ScanResultRow.formattedSize(totalReclaimableBytes)) reclaimable across \(findings.count) items")
-                        .font(DSTypography.subheading)
-                        .foregroundStyle(DSColor.textSecondary)
-                } else {
-                    Text("No scan yet — tap Rescan to look for findings.")
-                        .font(DSTypography.subheading)
-                        .foregroundStyle(DSColor.textSecondary)
-                }
-            }
+            // Reads `environment.scanRunner.progress` inside its own `body`,
+            // not this view's — `progress` ticks far more often than any
+            // other state here (see `ScanRunner`), and `@Observable`
+            // invalidates whichever `View.body` actually read the changed
+            // property. If this HStack were still inlined into
+            // `FindingsListView.body` directly, every tick would invalidate
+            // and re-diff the *entire* body, including `resultsList`'s
+            // hundreds of rows, not just this status line. Isolating the
+            // read here keeps a tick's invalidation scoped to this one small
+            // subview.
+            ScanProgressStatus(
+                lastScanFinishedAt: lastScanFinishedAt,
+                totalReclaimableBytes: totalReclaimableBytes,
+                findingsCount: findings.count
+            )
         }
     }
 
+    // A "nothing scanned yet" state and a "we scanned and found nothing"
+    // state read as different situations to a user (the first invites a
+    // first scan, the second is reassuring) — `ModuleEmptyStateCard` renders
+    // both through the same shape, but the headline/tint/CTA below vary by
+    // `lastScanFinishedAt` so each reads correctly.
     private var emptyState: some View {
-        GlassCard {
-            VStack(spacing: DSSpacing.small) {
-                Image(systemName: "checkmark.circle")
-                    .font(.largeTitle)
-                    .foregroundStyle(DSColor.safe)
-                Text(emptyStateMessage)
-                    .font(DSTypography.body)
-                    .foregroundStyle(DSColor.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(DSSpacing.large)
+        ModuleEmptyStateCard(
+            systemImage: lastScanFinishedAt == nil ? "sparkle.magnifyingglass" : "checkmark.seal",
+            headline: lastScanFinishedAt == nil ? "Nothing Scanned Yet" : "All Clear",
+            message: emptyStateMessage,
+            tint: lastScanFinishedAt == nil ? DSColor.accent : DSColor.safe,
+            actionLabel: lastScanFinishedAt == nil ? "Scan Now" : "Rescan",
+            actionSystemImage: lastScanFinishedAt == nil ? "sparkle.magnifyingglass" : "arrow.clockwise",
+            isActionDisabled: isScanning
+        ) {
+            Task { await scanNow() }
         }
     }
 
     private var resultsList: some View {
         GlassCard(padding: 0) {
+            // `LazyVStack`, not `VStack` — a plain `VStack` inside a
+            // `ScrollView` builds and lays out every row up front regardless
+            // of what's actually visible, which is the classic SwiftUI
+            // virtualization trap for long lists: System Junk scans
+            // routinely produce hundreds of findings, so a plain `VStack`
+            // here means scrolling has to push around hundreds of already-
+            // materialized `ScanResultRow`s at once. `LazyVStack` only
+            // instantiates rows near the visible viewport, which is what
+            // actually fixes the scroll lag (this is a structural fix, not
+            // something a formatting-cost microbenchmark would show — see
+            // the perf notes alongside this task).
             ScrollView {
-                VStack(spacing: 0) {
+                LazyVStack(spacing: 0) {
                     ForEach(findings) { finding in
                         ScanResultRow(
                             systemImage: rowIcon(for: finding),
-                            title: finding.item.category,
+                            icon: ScanItemRowDisplay.icon(for: finding.item),
+                            title: ScanItemRowDisplay.title(for: finding.item),
                             subtitle: finding.item.path,
                             sizeBytes: finding.item.sizeBytes,
                             safetyTier: finding.verdict.uiTier,
@@ -198,8 +237,10 @@ struct FindingsListView: View {
     }
 
     private func scanNow() async {
-        isScanning = true
-        defer { isScanning = false }
+        // `environment.runFullScan()` itself guards against duplicate
+        // concurrent scans (see `ScanRunner.run`) and drives
+        // `environment.scanRunner.isScanning`/`progress` for the duration —
+        // nothing to track locally here.
         await environment.runFullScan()
         await refresh()
     }
@@ -236,5 +277,39 @@ struct FindingsListView: View {
 
     private var errorAlertBinding: Binding<Bool> {
         Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
+    }
+}
+
+/// The "Scanning… NN% (x/y detectors)" / "Last scan: …" / "No scan yet…"
+/// status line, split out of `FindingsListView.header` specifically so it
+/// alone re-renders when `environment.scanRunner.progress` ticks — see the
+/// call site's comment for why that matters for scroll performance.
+@available(macOS 26.0, *)
+private struct ScanProgressStatus: View {
+    let lastScanFinishedAt: Date?
+    let totalReclaimableBytes: Int64
+    let findingsCount: Int
+
+    @Environment(AppEnvironment.self) private var environment
+
+    var body: some View {
+        HStack(spacing: DSSpacing.small) {
+            if environment.scanRunner.isScanning {
+                ProgressView(value: environment.scanRunner.progress).controlSize(.small).frame(width: 80)
+                // Completion-count-based, not time-based — see
+                // `ScanRunner.progress`'s doc comment.
+                Text("Scanning… \(Int(environment.scanRunner.progress * 100))% (\(environment.scanRunner.completedDetectorCount)/\(environment.scanRunner.totalDetectorCount) detectors)")
+                    .font(DSTypography.subheading)
+                    .foregroundStyle(DSColor.textSecondary)
+            } else if let lastScanFinishedAt {
+                Text("Last scan: \(lastScanFinishedAt.formatted(date: .abbreviated, time: .shortened)) · \(ScanResultRow.formattedSize(totalReclaimableBytes)) reclaimable across \(findingsCount) items")
+                    .font(DSTypography.subheading)
+                    .foregroundStyle(DSColor.textSecondary)
+            } else {
+                Text("No scan yet — tap Rescan to look for findings.")
+                    .font(DSTypography.subheading)
+                    .foregroundStyle(DSColor.textSecondary)
+            }
+        }
     }
 }

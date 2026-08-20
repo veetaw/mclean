@@ -21,8 +21,13 @@ struct RemoteControlView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DSSpacing.large) {
-            Label("Remote Control", systemImage: "wifi")
-                .font(DSTypography.largeTitle)
+            ModuleHeroHeader(
+                title: "Remote Control",
+                systemImage: "wifi",
+                subtitle: isRunning
+                    ? "Running — a paired phone or tablet on your LAN can view findings and request quarantine approvals."
+                    : "Let a paired phone or tablet on your LAN view findings and request quarantine approvals."
+            )
 
             if let server = environment.remoteControlServer {
                 statusCard(server: server)
@@ -43,11 +48,12 @@ struct RemoteControlView: View {
     }
 
     private var unavailableCard: some View {
-        GlassCard(tint: DSColor.warning.opacity(0.18)) {
-            Text("Remote Control isn't available in this build.")
-                .font(DSTypography.body)
-                .foregroundStyle(DSColor.textSecondary)
-        }
+        ModuleEmptyStateCard(
+            systemImage: "wifi.slash",
+            headline: "Not Available in This Build",
+            message: "This build can't run the LAN listener Remote Control needs (typically because it's sandboxed for the App Store).",
+            tint: DSColor.warning
+        )
     }
 
     private func statusCard(server: RemoteControlServer) -> some View {

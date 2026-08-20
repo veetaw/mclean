@@ -39,6 +39,13 @@ public final class AppEnvironment {
     public let quarantineManager: QuarantineManaging
     public let scanSnapshotStore: ScanSnapshotStore
 
+    /// Shared scan-in-progress state (`isScanning`, completion-based
+    /// `progress`, per-category breakdown) — see `ScanRunner`'s doc comment
+    /// for why this exists at `AppEnvironment` scope instead of per-view
+    /// `@State`. Views should read this via `@Environment(AppEnvironment.self)`
+    /// instead of tracking their own `isScanning`.
+    public let scanRunner = ScanRunner()
+
     /// Non-nil when `official_rules.yaml`'s integrity check failed, or
     /// either rule file failed to parse — surfaced as a visible warning in
     /// `SettingsView` per checkpoint 4's closure. `nil` means everything
@@ -200,16 +207,25 @@ public final class AppEnvironment {
     /// read from). This is the only place in `MainAppUI` that turns raw
     /// `ScanItem`s into `SafetyRules`-classified findings — every view
     /// reuses this snapshot rather than re-classifying on its own.
+    ///
+    /// Delegates the actual run to `scanRunner`, which publishes
+    /// `isScanning`/`progress` for the duration and — if a scan is already
+    /// in flight when this is called (e.g. the user tapped "Rescan" from two
+    /// different views, or twice quickly) — joins that run instead of
+    /// starting a second, concurrent one. Safe to call from any view; the
+    /// result is visible to every other view through `scanRunner` and
+    /// `scanSnapshotStore`, not just the caller.
     @discardableResult
     public func runFullScan(roots: [String] = []) async -> ScanRunResult {
         let startedAt = Date()
         let context = ScanContext(roots: roots)
-        let result = await scanEngine.runAll(context: context)
-        let findings = result.items.map { item in
-            ScanFinding(item: item, verdict: safetyClassifier.classify(item))
+        return await scanRunner.run(engine: scanEngine, context: context) { [weak self] result in
+            guard let self else { return }
+            let findings = result.items.map { item in
+                ScanFinding(item: item, verdict: self.safetyClassifier.classify(item))
+            }
+            await self.scanSnapshotStore.record(startedAt: startedAt, finishedAt: Date(), findings: findings)
         }
-        await scanSnapshotStore.record(startedAt: startedAt, finishedAt: Date(), findings: findings)
-        return result
     }
 
     // MARK: - Menu bar

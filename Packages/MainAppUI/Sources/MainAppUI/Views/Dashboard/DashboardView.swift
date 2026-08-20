@@ -38,7 +38,21 @@ struct DashboardView: View {
     @State private var findings: [ScanFinding] = []
     @State private var quarantineCount = 0
     @State private var lastScanFinishedAt: Date?
-    @State private var isScanning = false
+
+    // Deliberately NOT local `@State` — see `ScanRunner`'s doc comment and
+    // `FindingsListView`'s matching comment. Reading straight from
+    // `AppEnvironment.scanRunner` means a scan started from *this* view or
+    // any `FindingsListView` section is visible here (spinner + progress)
+    // without the Dashboard needing to have been the one that triggered it,
+    // and without resetting when `ContentView`'s sidebar switch recreates
+    // this view on navigation.
+    private var isScanning: Bool { environment.scanRunner.isScanning }
+
+    private static let relativeDateFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
 
     private var findingsCount: Int { findings.count }
     private var totalReclaimableBytes: Int64 {
@@ -67,35 +81,68 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.large) {
-                Text("MClean Pro")
-                    .font(DSTypography.largeTitle)
+                // The Dashboard's "hero": one glass surface carrying the
+                // app title, the live scan status line (folded in from what
+                // used to be a separate "Last Scan" card below — same
+                // `lastScanSummary` string, just no longer duplicated), and
+                // the single primary CTA ("Scan Everything"). This is the
+                // "big status hero, one clear primary action" layout this
+                // phase's brief asks for — no new colors, still
+                // `DSColor.accent`/`GlassCard`.
+                GlassCard(tint: DSColor.accent.opacity(0.12)) {
+                    VStack(alignment: .leading, spacing: DSSpacing.medium) {
+                        HStack(alignment: .top, spacing: DSSpacing.medium) {
+                            ModuleIconBadge(systemImage: "sparkle.magnifyingglass", tint: DSColor.accent, size: 56)
+                            VStack(alignment: .leading, spacing: DSSpacing.xxSmall) {
+                                Text("MClean Pro")
+                                    .font(DSTypography.largeTitle)
+                                Text(lastScanSummary)
+                                    .font(DSTypography.subheading)
+                                    .foregroundStyle(DSColor.textSecondary)
+                            }
+                            Spacer(minLength: DSSpacing.small)
+                        }
 
-                GlassControlGroup {
-                    Button("Scan Everything", systemImage: "sparkle.magnifyingglass") {
-                        Task { await scanNow() }
-                    }
-                    .dsButtonStyle(.primary)
-                    .disabled(isScanning)
+                        // "Scan Everything" is the ONLY thing that triggers a
+                        // full rescan on this screen — `.task { await
+                        // refresh() }` below only ever reads the existing
+                        // cached snapshot on appear, it never scans
+                        // automatically. That's deliberate: the Dashboard's
+                        // stat cards should show cached, already-fresh
+                        // results instantly, and only re-scan when the user
+                        // explicitly asks for one.
+                        GlassControlGroup {
+                            Button("Scan Everything", systemImage: "sparkle.magnifyingglass") {
+                                Task { await scanNow() }
+                            }
+                            .dsButtonStyle(.primary)
+                            .disabled(isScanning)
 
-                    if isScanning {
-                        ProgressView().controlSize(.small).padding(.leading, DSSpacing.xSmall)
+                            if isScanning {
+                                ProgressView(value: environment.scanRunner.progress)
+                                    .controlSize(.small)
+                                    .frame(width: 100)
+                                    .padding(.leading, DSSpacing.xSmall)
+                                // Completion-count-based ("N of M detectors
+                                // done"), not time-based — see
+                                // `ScanRunner.progress`.
+                                Text("\(Int(environment.scanRunner.progress * 100))%")
+                                    .font(DSTypography.subheading)
+                                    .foregroundStyle(DSColor.textSecondary)
+                            }
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if isScanning && !environment.scanRunner.categoryProgress.isEmpty {
+                    scanProgressBreakdown
                 }
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: DSSpacing.medium)], spacing: DSSpacing.medium) {
                     statCard(title: "Findings", value: "\(findingsCount)", systemImage: "magnifyingglass", tint: DSColor.accent)
                     statCard(title: "Reclaimable", value: ScanResultRow.formattedSize(totalReclaimableBytes), systemImage: "internaldrive", tint: DSColor.safe)
                     statCard(title: "In Quarantine", value: "\(quarantineCount)", systemImage: "xmark.bin", tint: DSColor.warning)
-                }
-
-                GlassCard {
-                    VStack(alignment: .leading, spacing: DSSpacing.xSmall) {
-                        Text("Last Scan").font(DSTypography.heading)
-                        Text(lastScanFinishedAt.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never — run a scan to see findings across every module.")
-                            .font(DSTypography.subheading)
-                            .foregroundStyle(DSColor.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if !categoryBreakdown.isEmpty {
@@ -125,9 +172,12 @@ struct DashboardView: View {
                         }
                     }
                 } else if lastScanFinishedAt != nil {
-                    Text("No cleanable items found in the last scan.")
-                        .font(DSTypography.subheading)
-                        .foregroundStyle(DSColor.textSecondary)
+                    ModuleEmptyStateCard(
+                        systemImage: "checkmark.seal",
+                        headline: "Nothing to Clean",
+                        message: "No cleanable items found in the last scan. Your Mac looks tidy.",
+                        tint: DSColor.safe
+                    )
                 }
 
                 Text("Build flavor: \(environment.capabilities.flavor.rawValue)")
@@ -136,7 +186,61 @@ struct DashboardView: View {
             }
             .padding(DSSpacing.xLarge)
         }
+        // Reads the existing cached snapshot only — never triggers a scan.
+        // "Scan Everything" (above) is the sole explicit rescan trigger.
         .task { await refresh() }
+        // Keeps the stat cards live if a scan started/finished from
+        // elsewhere (another `FindingsListView` section, or this same
+        // button) while this view is visible — see the matching comment in
+        // `FindingsListView`.
+        .onChange(of: environment.scanRunner.isScanning) { _, nowScanning in
+            if !nowScanning {
+                Task { await refresh() }
+            }
+        }
+    }
+
+    /// "Last scanned: 3 minutes ago" (relative, per the product ask),
+    /// falling back to an explicit "never scanned" message rather than an
+    /// empty/blank state.
+    private var lastScanSummary: String {
+        guard let lastScanFinishedAt else {
+            return "Never scanned — tap Scan Everything to check your Mac."
+        }
+        let relative = Self.relativeDateFormatter.localizedString(for: lastScanFinishedAt, relativeTo: Date())
+        return "Last scanned \(relative)"
+    }
+
+    /// Per-`DetectorCategory` "N/M detectors complete" rows, shown only
+    /// while a scan is in progress. This is a coarser grouping than the
+    /// sidebar's own sections (e.g. "System Junk" spans several
+    /// `DetectorCategory` values — trash, largeAndOldFiles, duplicates,
+    /// systemJunk), so it's presented here as its own "by scan module"
+    /// breakdown rather than folded into `categoryBreakdown` above.
+    private var scanProgressBreakdown: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: DSSpacing.xSmall) {
+                Text("Scanning by module").font(DSTypography.subheading).foregroundStyle(DSColor.textSecondary)
+                ForEach(sortedCategoryProgress, id: \.category) { entry in
+                    HStack {
+                        Text(entry.category.displayName)
+                            .font(DSTypography.caption)
+                            .foregroundStyle(DSColor.textPrimary)
+                        Spacer()
+                        Text("\(entry.progress.completed)/\(entry.progress.total)")
+                            .font(DSTypography.caption)
+                            .foregroundStyle(DSColor.textSecondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var sortedCategoryProgress: [(category: DetectorCategory, progress: ScanRunner.CategoryProgress)] {
+        environment.scanRunner.categoryProgress
+            .map { (category: $0.key, progress: $0.value) }
+            .sorted { $0.category.displayName < $1.category.displayName }
     }
 
     private func statCard(title: String, value: String, systemImage: String, tint: Color) -> some View {
@@ -193,8 +297,9 @@ struct DashboardView: View {
     }
 
     private func scanNow() async {
-        isScanning = true
-        defer { isScanning = false }
+        // `environment.runFullScan()` drives `environment.scanRunner`'s
+        // `isScanning`/`progress` for the duration and guards against a
+        // duplicate concurrent scan — nothing to track locally here.
         await environment.runFullScan()
         await refresh()
     }

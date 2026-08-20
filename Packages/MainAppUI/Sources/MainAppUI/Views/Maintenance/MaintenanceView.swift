@@ -19,12 +19,11 @@ struct MaintenanceView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DSSpacing.large) {
-                Label("Maintenance", systemImage: "stethoscope")
-                    .font(DSTypography.largeTitle)
-
-                Text("Each action below only ever runs when you tap Run — nothing here happens automatically or in the background.")
-                    .font(DSTypography.subheading)
-                    .foregroundStyle(DSColor.textSecondary)
+                ModuleHeroHeader(
+                    title: "Maintenance",
+                    systemImage: "stethoscope",
+                    subtitle: "Each action below only ever runs when you tap Run — nothing here happens automatically or in the background."
+                )
 
                 ForEach(environment.maintenanceTasks, id: \.id) { task in
                     taskCard(task)

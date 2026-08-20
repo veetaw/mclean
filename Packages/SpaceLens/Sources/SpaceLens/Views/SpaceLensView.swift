@@ -3,7 +3,11 @@ import SwiftUI
 import UIDesignSystem
 
 /// Space Lens's public entry point: an interactive disk-usage treemap
-/// rooted at a starting path (defaults to the user's home directory).
+/// rooted at a starting path (defaults to the whole boot volume, "/" — see
+/// ``DirectorySizeTreeBuilder`` and its `MountPointGuard` for how that
+/// avoids double-counting the boot volume's separate, firmlinked
+/// read-write "Data" volume, and never silently folds in unrelated
+/// external/network volumes mounted elsewhere under the tree).
 ///
 /// Owns the only navigation/loading state in this module — a breadcrumb
 /// stack of ``DirectoryNode`` from the scan root down to the level
@@ -36,8 +40,14 @@ public struct SpaceLensView: View {
     private let skipInitialScan: Bool
 
     /// - Parameters:
-    ///   - rootPath: The directory to start visualizing. Defaults to the
-    ///     current user's home directory when `nil`.
+    ///   - rootPath: The directory to start visualizing. Defaults to "/",
+    ///     the whole boot volume, when `nil` — `DirectorySizeTreeBuilder`
+    ///     is responsible for making that safe (no double-counting the
+    ///     firmlinked Data volume, no silently including other mounted
+    ///     volumes, graceful handling of SIP-protected paths it can't
+    ///     read). A future version could let the user pick a different
+    ///     root — e.g. a specific external volume — explicitly instead;
+    ///     not built here, out of scope.
     ///   - maxDepth: Forwarded to ``DirectorySizeTreeBuilder``. Drilling
     ///     into a directory that hit this depth limit during the original
     ///     scan transparently triggers a fresh, deeper scan rooted at that
@@ -51,7 +61,7 @@ public struct SpaceLensView: View {
         maxChildrenPerDirectory: Int = DirectorySizeTreeBuilder.defaultMaxChildrenPerDirectory,
         maxNodesBudget: Int = DirectorySizeTreeBuilder.defaultMaxNodesBudget
     ) {
-        self.rootURL = rootPath.map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser
+        self.rootURL = rootPath.map { URL(fileURLWithPath: $0) } ?? URL(fileURLWithPath: "/")
         self.maxDepth = maxDepth
         self.maxChildrenPerDirectory = maxChildrenPerDirectory
         self.maxNodesBudget = maxNodesBudget
@@ -184,12 +194,28 @@ public struct SpaceLensView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // Presentation-only polish (Phase 9 Wave 3, "VisualDesignPass"): adds an
+    // icon + a short headline above the existing message so this reads
+    // consistently with every other module's empty state, without touching
+    // `TreemapLevelView`/`TreemapTileView` or any drill-down/builder logic.
     private func emptyLevelView(_ node: DirectoryNode) -> some View {
         VStack {
             Spacer()
-            Text(node.sizeBytes > 0 ? "No further breakdown available for \(node.name)." : "\(node.name) is empty.")
-                .font(DSTypography.subheading)
-                .foregroundStyle(DSColor.textSecondary)
+            GlassCard {
+                VStack(spacing: DSSpacing.small) {
+                    Image(systemName: node.sizeBytes > 0 ? "square.dashed" : "folder")
+                        .font(.system(size: 32, weight: .medium))
+                        .foregroundStyle(DSColor.textTertiary)
+                    Text(node.sizeBytes > 0 ? "No Further Breakdown" : "Empty Folder")
+                        .font(DSTypography.heading)
+                    Text(node.sizeBytes > 0 ? "\(node.name) has no items broken out at this depth." : "\(node.name) is empty.")
+                        .font(DSTypography.subheading)
+                        .foregroundStyle(DSColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(DSSpacing.small)
+                .frame(maxWidth: 320)
+            }
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -204,18 +230,36 @@ public struct SpaceLensView: View {
 
     /// Handles a tap on a treemap tile. Directories with already-materialized
     /// children push directly onto the breadcrumb stack; a directory that
-    /// hit the original scan's depth limit (non-empty size, no children)
-    /// triggers a fresh, deeper scan rooted at that subdirectory instead.
-    /// Files and synthetic aggregate nodes are not navigable.
+    /// hit the original scan's depth (or global node budget) limit
+    /// (non-empty size, no children) triggers a fresh, deeper scan rooted
+    /// at that subdirectory instead. A file tile has nothing to drill into,
+    /// so it reveals itself in Finder instead — the same read-only action
+    /// already offered via the context menu, just also reachable with a
+    /// plain click since a dead click on a file tile would otherwise feel
+    /// unresponsive. Synthetic aggregate nodes ("N more items") have no
+    /// real filesystem path and are not navigable at all.
     private func drillDown(_ node: DirectoryNode) {
-        guard node.kind == .directory else { return }
-        if !node.children.isEmpty {
-            pathStack.append(node)
-        } else if node.sizeBytes > 0, let url = node.url {
-            rescan(root: url, appending: true)
+        switch node.kind {
+        case .directory:
+            if !node.children.isEmpty {
+                pathStack.append(node)
+            } else if node.sizeBytes > 0, let url = node.url {
+                rescan(root: url, appending: true)
+            }
+        case .file:
+            reveal(node)
+        case .aggregate:
+            break
         }
     }
 
+    /// Asks Finder to reveal `node`'s path — read-only (nothing here
+    /// selects for deletion or otherwise acts on the file), and the only
+    /// filesystem side effect anywhere in this module. This is not a
+    /// stepping stone toward a delete action: any future delete/quarantine
+    /// capability must go through `MainAppUI`'s existing
+    /// `SafetyRules`/`QuarantineConfirmationSheet` pipeline, not something
+    /// invented in this read-only package.
     private func reveal(_ node: DirectoryNode) {
         guard let url = node.url else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
